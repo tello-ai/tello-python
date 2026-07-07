@@ -91,8 +91,9 @@ office-sdk/
             _version.py
             py.typed
             client.py           # WS 연결 수명주기 + 명령 전송 + 인바운드 디스패치
-            calls.py            # create_call / cancel WS command 래퍼 (REST 아님)
             realtime.py         # pub/sub 이벤트 핸들러 + answer
+            events.py           # 인바운드 flat 프레임 파서 + EventType
+            commands.py         # 아웃바운드 {event,data} 봉투 빌더
             errors.py
             types.py
             config.py
@@ -296,9 +297,9 @@ async with TelloClient(api_key="tello_live_xxx", url="ws://localhost:3000/sdk") 
     ...
 ```
 
-### 4.2 `calls`
+### 4.2 통화 제어
 
-WS 명령으로 통화를 제어한다. REST가 아니라 `create_call` / `cancel` 프레임 래퍼다.
+통화 제어는 `TelloClient`의 `create_call` / `answer` / `cancel` 명령으로 직접 한다. REST 통화 관리(list/get/summary 등)는 지원하지 않는다.
 
 ```python
 await client.create_call(agent_id="agent-1", prompt="예약 확인")
