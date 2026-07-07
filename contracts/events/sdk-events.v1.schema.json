@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tello.ai/schemas/sdk-events.v1.schema.json",
+  "title": "Tello SDK WebSocket Events",
+  "description": "Inbound flat frames sent by turn-provider-gateway /sdk to SDK clients. Dispatch on `type`.",
+  "oneOf": [
+    { "$ref": "#/$defs/callStatusChanged" },
+    { "$ref": "#/$defs/userTurn" },
+    { "$ref": "#/$defs/agentTurn" },
+    { "$ref": "#/$defs/callCompleted" },
+    { "$ref": "#/$defs/callNoAnswer" },
+    { "$ref": "#/$defs/callFailed" }
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "required": ["type", "version", "call_id", "timestamp"],
+      "properties": {
+        "type": { "type": "string" },
+        "version": { "type": "string", "const": "1.0" },
+        "call_id": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["queued", "dialing", "ringing", "in_progress", "transferring", "completed", "no_answer", "failed", "cancelled"]
+    },
+    "callStatusChanged": {
+      "allOf": [{ "$ref": "#/$defs/base" }],
+      "properties": {
+        "type": { "const": "call.status_changed" },
+        "status": { "$ref": "#/$defs/status" },
+        "previous_status": { "$ref": "#/$defs/status" }
+      },
+      "required": ["status", "previous_status"]
+    },
+    "userTurn": {
+      "allOf": [{ "$ref": "#/$defs/base" }],
+      "properties": {
+        "type": { "const": "user.turn" },
+        "turn_index": { "type": "integer" },
+        "text": { "type": "string" }
+      },
+      "required": ["turn_index", "text"]
+    },
+    "agentTurn": {
+      "allOf": [{ "$ref": "#/$defs/base" }],
+      "properties": {
+        "type": { "const": "agent.turn" },
+        "turn_index": { "type": "integer" },
+        "text": { "type": "string" }
+      },
+      "required": ["turn_index", "text"]
+    },
+    "callCompleted": {
+      "allOf": [{ "$ref": "#/$defs/base" }],
+      "properties": {
+        "type": { "const": "call.completed" },
+        "status": { "const": "completed" }
+      },
+      "required": ["status"]
+    },
+    "callNoAnswer": {
+      "allOf": [{ "$ref": "#/$defs/base" }],
+      "properties": {
+        "type": { "const": "call.no_answer" },
+        "status": { "const": "no_answer" },
+        "failure_reason": { "type": "string" }
+      },
+      "required": ["status"]
+    },
+    "callFailed": {
+      "allOf": [{ "$ref": "#/$defs/base" }],
+      "properties": {
+        "type": { "const": "call.failed" },
+        "status": { "const": "failed" },
+        "failure_reason": { "type": "string" }
+      },
+      "required": ["status"]
+    }
+  }
+}

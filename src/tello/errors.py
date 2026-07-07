@@ -1,0 +1,63 @@
+"""SDK exception hierarchy, mapped 1:1 from gateway error codes.
+
+See ``contracts/errors/errors.v1.json``.
+"""
+
+from __future__ import annotations
+
+
+class TelloError(Exception):
+    """Base class for all Tello SDK errors."""
+
+
+class ConnectionClosedError(TelloError):
+    """The WebSocket connection is closed or was never established."""
+
+
+class AuthenticationError(TelloError):
+    """Connection auth failed (gateway code ``unauthenticated`` / close 4401)."""
+
+
+class ValidationError(TelloError):
+    """A command was rejected as invalid (gateway code ``agent_id_required``)."""
+
+
+class CallAlreadyActiveError(TelloError):
+    """A call is already active on this connection (``call_already_active``)."""
+
+
+class NoActiveCallError(TelloError):
+    """No active call for the attempted command (``no_active_call``)."""
+
+
+class CallRejectedError(TelloError):
+    """The call was rejected by intent validation (``call_rejected``).
+
+    ``question`` carries the clarifying question the gateway returned.
+    """
+
+    def __init__(self, message: str, question: str | None = None) -> None:
+        super().__init__(message)
+        self.question = question
+
+
+class TelloServerError(TelloError):
+    """Gateway-side internal error (``internal_error``)."""
+
+
+_CODE_TO_EXCEPTION: dict[str, type[TelloError]] = {
+    "unauthenticated": AuthenticationError,
+    "agent_id_required": ValidationError,
+    "call_already_active": CallAlreadyActiveError,
+    "no_active_call": NoActiveCallError,
+    "call_rejected": CallRejectedError,
+    "internal_error": TelloServerError,
+}
+
+
+def exception_for(code: str, message: str, question: str | None = None) -> TelloError:
+    """Build the SDK exception for a gateway error ``code``."""
+    exc_type = _CODE_TO_EXCEPTION.get(code, TelloServerError)
+    if exc_type is CallRejectedError:
+        return CallRejectedError(message, question=question)
+    return exc_type(message)

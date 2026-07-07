@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "frame": {
+    "description": "Flat error frame sent by turn-provider-gateway /sdk (not wrapped in an {error:{...}} envelope).",
+    "fields": {
+      "type": "error",
+      "version": "1.0",
+      "code": "string",
+      "message": "string",
+      "request_id": "string (optional, echoes the client's requestId on the failed command)",
+      "question": "string (optional, present for call_rejected)"
+    }
+  },
+  "errors": [
+    { "code": "unauthenticated", "message": "Authentication required", "closeCode": 4401, "sdkException": "AuthenticationError" },
+    { "code": "call_already_active", "message": "A call is already active", "sdkException": "CallAlreadyActiveError" },
+    { "code": "agent_id_required", "message": "agentId is required", "sdkException": "ValidationError" },
+    { "code": "no_active_call", "message": "No active call", "sdkException": "NoActiveCallError" },
+    { "code": "call_rejected", "message": "Call rejected", "sdkException": "CallRejectedError", "extra": ["question"] },
+    { "code": "internal_error", "message": "Internal error", "sdkException": "TelloServerError" }
+  ]
+}
