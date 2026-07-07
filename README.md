@@ -21,6 +21,15 @@ pip install tello-sdk        # requires Python >= 3.10; imports as `tello`
 The key is sent as `Authorization: Bearer <api_key>` on the WS upgrade request.
 Issue one in the portal (Agent settings → Advanced → Agent-linked / SDK).
 
+Pass it explicitly or via environment variables:
+
+```bash
+export TELLO_API_KEY="tello_live_xxx"
+export TELLO_URL="ws://localhost:3000/sdk"   # optional; defaults to ws://localhost:3000/sdk
+```
+
+`TelloClient()` with no arguments then reads `TELLO_API_KEY` / `TELLO_URL`.
+
 ## 3. Connect + start a call
 
 ```python

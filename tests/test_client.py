@@ -196,6 +196,24 @@ async def test_unauthenticated_raises_from_wait_closed():
         await client.aclose()
 
 
+async def test_env_var_config(monkeypatch):
+    async with running(make_gateway(auto_complete=True)) as url:
+        monkeypatch.setenv("TELLO_API_KEY", RAW_KEY)
+        monkeypatch.setenv("TELLO_URL", url)
+        completed = []
+        async with TelloClient() as client:  # no args -> read env
+            client.on(EventType.CALL_COMPLETED, lambda e: completed.append(e.call_id))
+            await client.create_call(agent_id="agent-1")
+            await client.wait_closed()
+    assert completed == ["call-1"]
+
+
+def test_missing_api_key_raises(monkeypatch):
+    monkeypatch.delenv("TELLO_API_KEY", raising=False)
+    with pytest.raises(ValueError):
+        TelloClient()
+
+
 async def test_heartbeat_pong_keeps_connection_alive():
     # Server pings mid-call; websockets auto-pongs. If the pong never arrived the
     # server's wait_for would raise and the call would not complete.

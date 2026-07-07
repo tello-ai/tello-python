@@ -21,13 +21,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import Any
 
 import websockets
 from websockets.exceptions import ConnectionClosed
 
 from .commands import answer_frame, cancel_frame, create_call_frame, encode
-from .config import DEFAULT_URL, ClientConfig
+from .config import DEFAULT_URL, ENV_API_KEY, ENV_URL, ClientConfig
 from .errors import AuthenticationError, ConnectionClosedError, TelloError, exception_for
 from .events import ErrorEvent, EventType, is_terminal, parse_event
 from .realtime import EventEmitter
@@ -52,13 +53,21 @@ class TelloClient(EventEmitter):
 
     def __init__(
         self,
-        api_key: str,
-        url: str = DEFAULT_URL,
+        api_key: str | None = None,
+        url: str | None = None,
         *,
         config: ClientConfig | None = None,
     ) -> None:
         super().__init__()
-        self._config = config or ClientConfig(api_key=api_key, url=url)
+        if config is None:
+            resolved_key = api_key if api_key is not None else os.environ.get(ENV_API_KEY)
+            if not resolved_key:
+                raise ValueError(
+                    f"api_key is required (pass api_key=... or set ${ENV_API_KEY})"
+                )
+            resolved_url = url or os.environ.get(ENV_URL) or DEFAULT_URL
+            config = ClientConfig(api_key=resolved_key, url=resolved_url)
+        self._config = config
         self._ws: Any = None
         self._recv_task: asyncio.Task[None] | None = None
         self._done = asyncio.Event()

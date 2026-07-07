@@ -6,6 +6,10 @@ from dataclasses import dataclass
 
 DEFAULT_URL = "ws://localhost:3000/sdk"
 
+#: Environment variables read when ``api_key`` / ``url`` are not passed explicitly.
+ENV_API_KEY = "TELLO_API_KEY"
+ENV_URL = "TELLO_URL"
+
 
 @dataclass
 class ClientConfig:
