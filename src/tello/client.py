@@ -11,6 +11,10 @@ Design notes
   frame and closes with code 4401 — so auth failure surfaces on the receive
   loop and is raised from :meth:`wait_closed` / subsequent commands as
   :class:`~tello.errors.AuthenticationError`.
+* The gateway keeps the socket **open** on command errors (it never sends a
+  terminal frame for a rejected ``create_call``). :meth:`wait_closed` therefore
+  resolves on a call-start rejection too, raising the mapped exception, so a
+  failed ``create_call`` does not hang the caller.
 * The gateway drives a WS-level ping heartbeat; the ``websockets`` library
   answers pongs automatically, so no app-level heartbeat is needed here.
 * There is no reconnect/resume protocol (gateway does not support it).
@@ -29,13 +33,25 @@ from websockets.exceptions import ConnectionClosed
 
 from .commands import answer_frame, cancel_frame, create_call_frame, encode
 from .config import DEFAULT_URL, ENV_API_KEY, ENV_URL, ClientConfig
-from .errors import AuthenticationError, ConnectionClosedError, TelloError, exception_for
-from .events import ErrorEvent, EventType, is_terminal, parse_event
+from .errors import (
+    AuthenticationError,
+    ConnectionClosedError,
+    SessionReplacedError,
+    TelloError,
+    exception_for,
+)
+from .events import ErrorEvent, Event, EventType, is_terminal, parse_event
 from .realtime import EventEmitter
 
 logger = logging.getLogger("tello")
 
 _CLOSE_UNAUTHENTICATED = 4401
+_CLOSE_SESSION_REPLACED = 4429
+
+# Error codes that do NOT abort a pending create_call wait: no_active_call is
+# benign, and call_already_active means an existing call is still running and
+# will produce its own terminal event.
+_NON_ABORTING_ERROR_CODES = frozenset({"no_active_call", "call_already_active"})
 
 
 class TelloClient(EventEmitter):
@@ -49,6 +65,8 @@ class TelloClient(EventEmitter):
                 await client.answer(text="...")
             await client.create_call(agent_id="agent-1", prompt="...")
             await client.wait_closed()
+
+    ``api_key`` / ``url`` fall back to ``TELLO_API_KEY`` / ``TELLO_URL`` when omitted.
     """
 
     def __init__(
@@ -70,16 +88,22 @@ class TelloClient(EventEmitter):
         self._config = config
         self._ws: Any = None
         self._recv_task: asyncio.Task[None] | None = None
-        self._done = asyncio.Event()
-        self._close_exc: TelloError | None = None
+        self._call_done = asyncio.Event()  # current call reached a terminal state
+        self._closed = asyncio.Event()  # the WS connection has closed
+        self._close_exc: TelloError | None = None  # connection-level error to raise
+        self._call_error: TelloError | None = None  # call-level error to raise once
+        self._active = False  # a call is in progress (awaiting its terminal event)
+        self._call_gen = 0  # bumped on each create_call to detect re-entrant calls
 
     # -- lifecycle ---------------------------------------------------------
 
     async def connect(self) -> "TelloClient":
         """Open the WS connection and start the receive loop."""
         headers = {"Authorization": f"Bearer {self._config.api_key}"}
-        self._done.clear()
+        self._call_done.clear()
+        self._closed.clear()
         self._close_exc = None
+        self._call_error = None
         self._ws = await websockets.connect(
             self._config.url,
             additional_headers=headers,
@@ -105,11 +129,22 @@ class TelloClient(EventEmitter):
     async def wait_closed(self) -> None:
         """Wait until the current call ends or the connection closes.
 
-        Raises the stored connection error (e.g. auth failure) if one occurred.
+        Raises the connection error (auth / session-replaced / abnormal
+        mid-call disconnect) or a call-start rejection error if one occurred.
         """
-        await self._done.wait()
+        call_done = asyncio.ensure_future(self._call_done.wait())
+        closed = asyncio.ensure_future(self._closed.wait())
+        try:
+            await asyncio.wait({call_done, closed}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            call_done.cancel()
+            closed.cancel()
         if self._close_exc is not None:
             raise self._close_exc
+        if self._call_error is not None:
+            error = self._call_error
+            self._call_error = None
+            raise error
 
     # -- commands ----------------------------------------------------------
 
@@ -121,7 +156,10 @@ class TelloClient(EventEmitter):
         request_id: str | None = None,
     ) -> None:
         """Start a call. Resets terminal state so :meth:`wait_closed` tracks it."""
-        self._done.clear()
+        self._call_gen += 1
+        self._call_done.clear()
+        self._call_error = None
+        self._active = True
         await self._send(create_call_frame(agent_id, prompt, metadata, request_id))
 
     async def answer(
@@ -143,7 +181,23 @@ class TelloClient(EventEmitter):
         try:
             await self._ws.send(encode(frame))
         except ConnectionClosed as exc:
-            raise self._close_exc or ConnectionClosedError(str(exc)) from exc
+            raise self._connection_error(exc) from exc
+
+    def _connection_error(self, exc: ConnectionClosed | None = None) -> TelloError:
+        """Best-effort typed error for a send/close on a dead socket.
+
+        Prefers the error the receive loop already recorded; otherwise derives
+        one from the socket close code (covers the connect-then-send race where
+        the 4401/4429 close has not been processed by the receive loop yet).
+        """
+        if self._close_exc is not None:
+            return self._close_exc
+        code = getattr(self._ws, "close_code", None)
+        if code == _CLOSE_UNAUTHENTICATED:
+            return AuthenticationError("unauthenticated")
+        if code == _CLOSE_SESSION_REPLACED:
+            return SessionReplacedError("session replaced")
+        return ConnectionClosedError(str(exc) if exc is not None else "connection closed")
 
     # -- receive loop ------------------------------------------------------
 
@@ -155,6 +209,9 @@ class TelloClient(EventEmitter):
                 except (ValueError, TypeError):
                     logger.warning("tello: dropping non-JSON frame")
                     continue
+                if not isinstance(frame, dict):
+                    logger.warning("tello: dropping non-object frame")
+                    continue
                 await self._dispatch(frame)
         except ConnectionClosed as exc:
             self._note_close(exc)
@@ -165,14 +222,25 @@ class TelloClient(EventEmitter):
         event = parse_event(frame)
 
         if isinstance(event, ErrorEvent):
+            exc = exception_for(event.code, event.message, event.question)
             if event.code == "unauthenticated":
-                self._close_exc = exception_for(event.code, event.message, event.question)
+                self._close_exc = exc
+            elif event.code not in _NON_ABORTING_ERROR_CODES and self._active:
+                # The gateway sends no terminal frame for a rejected command, so
+                # unblock wait_closed() with the mapped error instead of hanging.
+                self._call_error = exc
+                self._active = False
+                self._call_done.set()
             await self._safe_emit(EventType.ERROR, event)
             return
 
+        # Snapshot the call generation: if a terminal handler starts a follow-up
+        # call, _call_gen advances and we must not re-set _call_done for it.
+        gen = self._call_gen
         await self._safe_emit(event.type, event)
-        if is_terminal(event):
-            self._done.set()
+        if is_terminal(event) and self._call_gen == gen:
+            self._active = False
+            self._call_done.set()
 
     async def _safe_emit(self, event_type: str, event: Any) -> None:
         try:
@@ -181,11 +249,27 @@ class TelloClient(EventEmitter):
             logger.exception("tello: event handler for %r raised", event_type)
 
     def _note_close(self, exc: ConnectionClosed) -> None:
+        if self._close_exc is not None:
+            return
         received = getattr(exc, "rcvd", None)
-        if received is not None and received.code == _CLOSE_UNAUTHENTICATED and self._close_exc is None:
-            self._close_exc = AuthenticationError(received.reason or "unauthenticated")
+        code = received.code if received is not None else getattr(self._ws, "close_code", None)
+        reason = received.reason if received is not None else None
+        if code == _CLOSE_UNAUTHENTICATED:
+            self._close_exc = AuthenticationError(reason or "unauthenticated")
+        elif code == _CLOSE_SESSION_REPLACED:
+            self._close_exc = SessionReplacedError(reason or "session replaced")
 
     async def _finish(self) -> None:
-        # Surface disconnect to subscribers, then unblock wait_closed().
-        await self._safe_emit(EventType.DISCONNECTED, {"type": EventType.DISCONNECTED})
-        self._done.set()
+        # A close (clean or abnormal) while a call is still active means the call
+        # never reached a terminal event: surface it rather than letting
+        # wait_closed() report a phantom success.
+        if self._active and self._close_exc is None and self._call_error is None:
+            self._close_exc = ConnectionClosedError("connection closed before call terminated")
+        # Surface disconnect to subscribers as a typed Event, then unblock any
+        # waiter. call_id/timestamp are empty: this is an SDK-local pseudo-event.
+        await self._safe_emit(
+            EventType.DISCONNECTED,
+            Event(type=EventType.DISCONNECTED, version="", call_id="", timestamp="", raw={}),
+        )
+        self._closed.set()
+        self._call_done.set()

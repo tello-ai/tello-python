@@ -24,6 +24,7 @@ from .errors import (
     CallRejectedError,
     ConnectionClosedError,
     NoActiveCallError,
+    SessionReplacedError,
     TelloError,
     TelloServerError,
     ValidationError,
@@ -62,5 +63,6 @@ __all__ = [
     "CallAlreadyActiveError",
     "NoActiveCallError",
     "CallRejectedError",
+    "SessionReplacedError",
     "TelloServerError",
 ]

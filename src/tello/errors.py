@@ -14,6 +14,10 @@ class ConnectionClosedError(TelloError):
     """The WebSocket connection is closed or was never established."""
 
 
+class SessionReplacedError(TelloError):
+    """The connection was displaced by another session (gateway close 4429)."""
+
+
 class AuthenticationError(TelloError):
     """Connection auth failed (gateway code ``unauthenticated`` / close 4401)."""
 

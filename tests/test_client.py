@@ -11,7 +11,14 @@ from contextlib import asynccontextmanager
 import pytest
 import websockets
 
-from tello import AuthenticationError, EventType, TelloClient
+from tello import (
+    AuthenticationError,
+    ConnectionClosedError,
+    EventType,
+    SessionReplacedError,
+    TelloClient,
+    ValidationError,
+)
 
 RAW_KEY = "sdk-secret"
 
@@ -74,7 +81,13 @@ def _error(code, message, request_id=None):
     return json.dumps(frame)
 
 
-def make_gateway(auto_complete=True, ping_on_create=False):
+def make_gateway(
+    auto_complete=True,
+    ping_on_create=False,
+    drop_after_user_turn=False,
+    scalar_frame=False,
+    close_4429=False,
+):
     async def handler(ws):
         if ws.request.headers.get("Authorization") != f"Bearer {RAW_KEY}":
             await ws.send(_error("unauthenticated", "Authentication required"))
@@ -89,11 +102,20 @@ def make_gateway(auto_complete=True, ping_on_create=False):
 
             if event == "create_call":
                 if not data.get("agentId"):
+                    # rejected create: send error, keep socket open, no terminal
                     await ws.send(_error("agent_id_required", "agentId is required", data.get("requestId")))
                     continue
+                if close_4429:
+                    await ws.close(4429, "session replaced")
+                    return
                 active = True
                 await ws.send(_status_changed("in_progress", "queued"))
+                if scalar_frame:
+                    await ws.send(json.dumps(123))  # valid JSON, non-object
                 await ws.send(_user_turn(1, "Need help"))
+                if drop_after_user_turn:
+                    await ws.close()  # abnormal: close mid-call, no terminal
+                    return
                 if ping_on_create:
                     pong_waiter = await ws.ping()
                     await asyncio.wait_for(pong_waiter, timeout=1)
@@ -194,6 +216,53 @@ async def test_unauthenticated_raises_from_wait_closed():
         with pytest.raises(AuthenticationError):
             await client.wait_closed()
         await client.aclose()
+
+
+async def test_rejected_create_unblocks_wait_closed():
+    # gateway rejects create_call (empty agentId) with an error frame and no
+    # terminal/close; wait_closed() must raise, not hang.
+    async with running(make_gateway(auto_complete=False)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            await client.create_call(agent_id="")
+            with pytest.raises(ValidationError):
+                await asyncio.wait_for(client.wait_closed(), timeout=2)
+
+
+async def test_abnormal_disconnect_raises():
+    async with running(make_gateway(drop_after_user_turn=True)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            await client.create_call(agent_id="agent-1")
+            with pytest.raises(ConnectionClosedError):
+                await asyncio.wait_for(client.wait_closed(), timeout=2)
+
+
+async def test_non_object_frame_is_dropped_not_fatal():
+    completed = []
+    async with running(make_gateway(auto_complete=True, scalar_frame=True)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            client.on(EventType.CALL_COMPLETED, lambda e: completed.append(e.call_id))
+            await client.create_call(agent_id="agent-1")
+            await client.wait_closed()
+    assert completed == ["call-1"]  # bad frame dropped, stream continued
+
+
+async def test_disconnected_event_is_typed_event():
+    seen = []
+    async with running(make_gateway(auto_complete=True)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            client.on(EventType.DISCONNECTED, lambda e: seen.append(e.type))
+            await client.create_call(agent_id="agent-1")
+            await client.wait_closed()
+    # aclose() ends the recv loop, which emits a typed DISCONNECTED Event
+    assert seen == [EventType.DISCONNECTED]
+
+
+async def test_session_replaced_close_raises():
+    async with running(make_gateway(close_4429=True)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            await client.create_call(agent_id="agent-1")
+            with pytest.raises(SessionReplacedError):
+                await asyncio.wait_for(client.wait_closed(), timeout=2)
 
 
 async def test_env_var_config(monkeypatch):

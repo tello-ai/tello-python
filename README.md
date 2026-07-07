@@ -97,7 +97,13 @@ Gateway error frames map 1:1 to exceptions
 | `internal_error` | `TelloServerError` |
 
 Command-level errors are also delivered to `EventType.ERROR` subscribers without
-closing the socket. Auth failure is raised from `wait_closed()`.
+closing the socket. `wait_closed()` re-raises the relevant error so a failed
+`create_call` (e.g. `agent_id_required`, `call_rejected`) does not hang:
+
+- auth failure → `AuthenticationError`
+- a call-start rejection → its mapped exception above
+- the connection dropping mid-call → `ConnectionClosedError`
+- the session being displaced (close 4429) → `SessionReplacedError`
 
 The gateway drives a WS-level ping heartbeat; `websockets` answers pongs
 automatically. There is no reconnect/resume — treat an abnormal close as
