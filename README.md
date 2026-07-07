@@ -8,7 +8,7 @@ the gateway streams each caller turn from a live phone call, and your handler's
 reply is forwarded back into the call.
 
 > Transport is WebSocket only. There is no REST or webhook surface. The protocol
-> contract lives in [`contracts/protocol/sdk-ws.v1.md`](contracts/protocol/sdk-ws.v1.md).
+> contract lives in [`docs/protocol/sdk-ws.v1.md`](docs/protocol/sdk-ws.v1.md).
 
 ## 1. Install
 
@@ -76,7 +76,7 @@ the connection closes.
 ## 5. Error handling
 
 Gateway error frames map 1:1 to exceptions
-(see [`contracts/errors/errors.v1.json`](contracts/errors/errors.v1.json)):
+(see [`docs/errors/errors.v1.json`](docs/errors/errors.v1.json)):
 
 | gateway `code` | exception |
 | --- | --- |
