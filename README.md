@@ -39,6 +39,18 @@ async def main():
 asyncio.run(main())
 ```
 
+`TelloClient(...)` is the constructor (Python has no `new`). The `async with`
+form is sugar for `connect()` / `aclose()`; use them explicitly if you prefer:
+
+```python
+client = TelloClient(api_key="tello_live_xxx", url="ws://localhost:3000/sdk")
+await client.connect()
+client.on(EventType.USER_TURN, on_user_turn)
+await client.create_call(agent_id="agent-1", prompt="예약 확인")
+await client.wait_closed()
+await client.aclose()
+```
+
 ## 4. Realtime turn events (pub/sub)
 
 Subscribe handlers (sync or async) per event type via `client.on(...)`:
