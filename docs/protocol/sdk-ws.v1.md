@@ -46,6 +46,7 @@ HTTP upgrade 요청에서 API key를 다음 순서로 읽는다.
 
 ```json
 { "event": "create_call", "data": {
+  "to": "+821012345678",          // 필수. 전화할 대상 번호. 비면 error: to_required
   "agentId": "agent-1",           // 필수. 비면 error: agent_id_required
   "prompt": "예약 확인",           // 선택, 기본 ""
   "metadata": { "any": "json" },  // 선택
@@ -104,6 +105,7 @@ status 어휘: `queued`, `dialing`, `ringing`, `in_progress`, `transferring`, `c
 | --- | --- | --- |
 | `unauthenticated` | Authentication required | 연결 시 발생, close 4401 동반 |
 | `call_already_active` | A call is already active | |
+| `to_required` | to is required | |
 | `agent_id_required` | agentId is required | |
 | `no_active_call` | No active call | |
 | `call_rejected` | Call rejected | `question` 필드 동반 가능 |

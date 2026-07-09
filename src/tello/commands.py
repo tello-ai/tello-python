@@ -13,12 +13,13 @@ from typing import Any
 
 
 def create_call_frame(
+    to: str,
     agent_id: str,
     prompt: str = "",
     metadata: dict[str, Any] | None = None,
     request_id: str | None = None,
 ) -> dict[str, Any]:
-    data: dict[str, Any] = {"agentId": agent_id, "prompt": prompt}
+    data: dict[str, Any] = {"to": to, "agentId": agent_id, "prompt": prompt}
     if metadata is not None:
         data["metadata"] = metadata
     if request_id is not None:

@@ -305,7 +305,7 @@ async def main():
             print(f"통화 종료: {event.call_id}")
 
         # 통화 시작
-        await client.create_call(agent_id="agent-1", prompt="예약 확인")
+        await client.create_call(to="+821012345678", agent_id="agent-1", prompt="예약 확인")
         await client.wait_closed()   # 종단 이벤트까지 대기
 
 asyncio.run(main())
@@ -351,7 +351,7 @@ client.on('call.completed', (event) => {
   console.log('통화 종료', event.call_id);
 });
 
-await client.createCall({ agentId: 'agent-1', prompt: '예약 확인' });
+await client.createCall('+821012345678', 'agent-1', '예약 확인');
 await client.waitClosed();
 ```
 

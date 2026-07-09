@@ -11,15 +11,24 @@ from tello.events import (
 
 
 def test_create_call_frame_uses_envelope_and_camelcase():
-    frame = create_call_frame("agent-1", "hi", {"src": "test"}, "r1")
+    frame = create_call_frame("+821012345678", "agent-1", "hi", {"src": "test"}, "r1")
     assert frame == {
         "event": "create_call",
-        "data": {"agentId": "agent-1", "prompt": "hi", "metadata": {"src": "test"}, "requestId": "r1"},
+        "data": {
+            "to": "+821012345678",
+            "agentId": "agent-1",
+            "prompt": "hi",
+            "metadata": {"src": "test"},
+            "requestId": "r1",
+        },
     }
 
 
 def test_create_call_frame_omits_optional_fields():
-    assert create_call_frame("agent-1") == {"event": "create_call", "data": {"agentId": "agent-1", "prompt": ""}}
+    assert create_call_frame("+821012345678", "agent-1") == {
+        "event": "create_call",
+        "data": {"to": "+821012345678", "agentId": "agent-1", "prompt": ""},
+    }
 
 
 def test_answer_and_cancel_frames():

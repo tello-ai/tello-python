@@ -6,11 +6,12 @@ import (
 )
 
 func TestCreateCallFrameUsesEnvelopeAndCamelCase(t *testing.T) {
-	frame := CreateCallFrame("agent-1", "hi", map[string]any{"src": "test"}, "r1")
+	frame := CreateCallFrame("+821012345678", "agent-1", "hi", map[string]any{"src": "test"}, "r1")
 
 	want := map[string]any{
 		"event": "create_call",
 		"data": map[string]any{
+			"to":        "+821012345678",
 			"agentId":   "agent-1",
 			"prompt":    "hi",
 			"metadata":  map[string]any{"src": "test"},
@@ -23,8 +24,8 @@ func TestCreateCallFrameUsesEnvelopeAndCamelCase(t *testing.T) {
 func TestCreateCallFrameOmitsOptionalFields(t *testing.T) {
 	assertJSONEqual(t, map[string]any{
 		"event": "create_call",
-		"data":  map[string]any{"agentId": "agent-1", "prompt": ""},
-	}, CreateCallFrame("agent-1", "", nil, ""))
+		"data":  map[string]any{"to": "+821012345678", "agentId": "agent-1", "prompt": ""},
+	}, CreateCallFrame("+821012345678", "agent-1", "", nil, ""))
 }
 
 func TestAnswerAndCancelFrames(t *testing.T) {

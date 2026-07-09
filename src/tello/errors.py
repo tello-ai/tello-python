@@ -23,7 +23,7 @@ class AuthenticationError(TelloError):
 
 
 class ValidationError(TelloError):
-    """A command was rejected as invalid (gateway code ``agent_id_required``)."""
+    """A command was rejected as invalid (for example ``to_required``)."""
 
 
 class CallAlreadyActiveError(TelloError):
@@ -51,6 +51,7 @@ class TelloServerError(TelloError):
 
 _CODE_TO_EXCEPTION: dict[str, type[TelloError]] = {
     "unauthenticated": AuthenticationError,
+    "to_required": ValidationError,
     "agent_id_required": ValidationError,
     "call_already_active": CallAlreadyActiveError,
     "no_active_call": NoActiveCallError,

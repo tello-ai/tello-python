@@ -4,8 +4,9 @@ import "encoding/json"
 
 type CommandFrame map[string]any
 
-func CreateCallFrame(agentID, prompt string, metadata map[string]any, requestID string) CommandFrame {
+func CreateCallFrame(to, agentID, prompt string, metadata map[string]any, requestID string) CommandFrame {
 	data := map[string]any{
+		"to":      to,
 		"agentId": agentID,
 		"prompt":  prompt,
 	}

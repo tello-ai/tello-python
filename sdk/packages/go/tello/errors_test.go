@@ -11,6 +11,12 @@ func TestErrorForMapsCodes(t *testing.T) {
 	if !errors.As(err, &noActive) {
 		t.Fatalf("expected NoActiveCallError, got %T", err)
 	}
+
+	err = ErrorFor("to_required", "to is required", "")
+	var validation *ValidationError
+	if !errors.As(err, &validation) {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
 }
 
 func TestCallRejectedPreservesQuestion(t *testing.T) {

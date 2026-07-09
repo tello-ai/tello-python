@@ -42,7 +42,7 @@ async def main():
         async def on_user_turn(event):
             await client.answer(text="확인했습니다. 계속 말씀해주세요.")
 
-        await client.create_call(agent_id="agent-1", prompt="예약 확인")
+        await client.create_call(to="+821012345678", agent_id="agent-1", prompt="예약 확인")
         await client.wait_closed()
 
 asyncio.run(main())
@@ -55,7 +55,7 @@ form is sugar for `connect()` / `aclose()`; use them explicitly if you prefer:
 client = TelloClient(api_key="tello_live_xxx", url="ws://localhost:3000/sdk")
 await client.connect()
 client.on(EventType.USER_TURN, on_user_turn)
-await client.create_call(agent_id="agent-1", prompt="예약 확인")
+await client.create_call(to="+821012345678", agent_id="agent-1", prompt="예약 확인")
 await client.wait_closed()
 await client.aclose()
 ```
@@ -75,7 +75,7 @@ Subscribe handlers (sync or async) per event type via `client.on(...)`:
 | `ERROR` | `error` | `code`, `message`, `request_id?`, `question?` |
 | `DISCONNECTED` | `disconnected` | SDK-local; emitted when the WS closes |
 
-Commands: `await client.create_call(agent_id, prompt="", metadata=None)`,
+Commands: `await client.create_call(to, agent_id, prompt="", metadata=None)`,
 `await client.answer(text, message_id=None)`, `await client.cancel()`.
 
 `await client.wait_closed()` resolves when the call reaches a terminal state
@@ -90,6 +90,7 @@ Gateway error frames map 1:1 to exceptions
 | gateway `code` | exception |
 | --- | --- |
 | `unauthenticated` | `AuthenticationError` (also close code 4401) |
+| `to_required` | `ValidationError` |
 | `agent_id_required` | `ValidationError` |
 | `call_already_active` | `CallAlreadyActiveError` |
 | `no_active_call` | `NoActiveCallError` |
@@ -98,7 +99,7 @@ Gateway error frames map 1:1 to exceptions
 
 Command-level errors are also delivered to `EventType.ERROR` subscribers without
 closing the socket. `wait_closed()` re-raises the relevant error so a failed
-`create_call` (e.g. `agent_id_required`, `call_rejected`) does not hang:
+`create_call` (e.g. `to_required`, `agent_id_required`, `call_rejected`) does not hang:
 
 - auth failure → `AuthenticationError`
 - a call-start rejection → its mapped exception above

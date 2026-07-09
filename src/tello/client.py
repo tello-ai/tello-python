@@ -63,7 +63,7 @@ class TelloClient(EventEmitter):
             @client.on(EventType.USER_TURN)
             async def _(event):
                 await client.answer(text="...")
-            await client.create_call(agent_id="agent-1", prompt="...")
+            await client.create_call(to="+821012345678", agent_id="agent-1", prompt="...")
             await client.wait_closed()
 
     ``api_key`` / ``url`` fall back to ``TELLO_API_KEY`` / ``TELLO_URL`` when omitted.
@@ -150,6 +150,7 @@ class TelloClient(EventEmitter):
 
     async def create_call(
         self,
+        to: str,
         agent_id: str,
         prompt: str = "",
         metadata: dict[str, Any] | None = None,
@@ -160,7 +161,7 @@ class TelloClient(EventEmitter):
         self._call_done.clear()
         self._call_error = None
         self._active = True
-        await self._send(create_call_frame(agent_id, prompt, metadata, request_id))
+        await self._send(create_call_frame(to, agent_id, prompt, metadata, request_id))
 
     async def answer(
         self,

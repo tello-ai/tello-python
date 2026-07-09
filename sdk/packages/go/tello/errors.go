@@ -24,6 +24,8 @@ func ErrorFor(code, message, question string) error {
 	switch code {
 	case "unauthenticated":
 		return &AuthenticationError{base}
+	case "to_required":
+		return &ValidationError{base}
 	case "agent_id_required":
 		return &ValidationError{base}
 	case "call_already_active":

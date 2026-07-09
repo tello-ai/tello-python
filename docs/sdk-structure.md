@@ -280,7 +280,7 @@ sdk/contracts/errors/errors.v1.json
 }
 ```
 
-`code` 목록: `unauthenticated`, `call_already_active`, `agent_id_required`, `no_active_call`, `call_rejected`, `internal_error`. `request_id`는 클라이언트가 명령에 `requestId`를 넣었을 때만 에코된다. `call_rejected`는 `question` 필드를 동반할 수 있다.
+`code` 목록: `unauthenticated`, `call_already_active`, `to_required`, `agent_id_required`, `no_active_call`, `call_rejected`, `internal_error`. `request_id`는 클라이언트가 명령에 `requestId`를 넣었을 때만 에코된다. `call_rejected`는 `question` 필드를 동반할 수 있다.
 
 ---
 
@@ -302,7 +302,7 @@ async with TelloClient(api_key="tello_live_xxx", url="ws://localhost:3000/sdk") 
 통화 제어는 `TelloClient`의 `create_call` / `answer` / `cancel` 명령으로 직접 한다. REST 통화 관리(list/get/summary 등)는 지원하지 않는다.
 
 ```python
-await client.create_call(agent_id="agent-1", prompt="예약 확인")
+await client.create_call(to="+821012345678", agent_id="agent-1", prompt="예약 확인")
 # ...
 await client.cancel()
 ```
@@ -326,6 +326,7 @@ gateway 에러 코드를 SDK 예외 타입으로 1:1 매핑한다.
 | gateway `code` | SDK 예외 |
 | --- | --- |
 | `unauthenticated` | `AuthenticationError` |
+| `to_required` | `ValidationError` |
 | `agent_id_required` | `ValidationError` |
 | `call_already_active` | `CallAlreadyActiveError` |
 | `no_active_call` | `NoActiveCallError` |
@@ -833,7 +834,7 @@ async def main():
         async def on_user_turn(event):
             await client.answer(text="확인했습니다. 계속 말씀해주세요.")
 
-        await client.create_call(agent_id="agent-1", prompt="예약 확인")
+        await client.create_call(to="+821012345678", agent_id="agent-1", prompt="예약 확인")
         await client.wait_closed()
 
 asyncio.run(main())

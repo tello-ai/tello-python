@@ -14,6 +14,7 @@
   "errors": [
     { "code": "unauthenticated", "message": "Authentication required", "closeCode": 4401, "sdkException": "AuthenticationError" },
     { "code": "call_already_active", "message": "A call is already active", "sdkException": "CallAlreadyActiveError" },
+    { "code": "to_required", "message": "to is required", "sdkException": "ValidationError" },
     { "code": "agent_id_required", "message": "agentId is required", "sdkException": "ValidationError" },
     { "code": "no_active_call", "message": "No active call", "sdkException": "NoActiveCallError" },
     { "code": "call_rejected", "message": "Call rejected", "sdkException": "CallRejectedError", "extra": ["question"] },

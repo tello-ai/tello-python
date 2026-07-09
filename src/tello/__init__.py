@@ -9,7 +9,7 @@
             async def on_user_turn(event):
                 await client.answer(text="확인했습니다.")
 
-            await client.create_call(agent_id="agent-1", prompt="예약 확인")
+            await client.create_call(to="+821012345678", agent_id="agent-1", prompt="예약 확인")
             await client.wait_closed()
 
     asyncio.run(main())
