@@ -22,6 +22,7 @@ class EventType:
 
     USER_TURN = "user.turn"
     AGENT_TURN = "agent.turn"
+    AGENTS_LISTED = "agents.listed"
     CALL_STATUS_CHANGED = "call.statusChanged"
     CALL_COMPLETED = "call.completed"
     CALL_NO_ANSWER = "call.noAnswer"
@@ -84,7 +85,29 @@ class ErrorEvent:
     question: str | None = None
 
 
-def parse_event(frame: dict[str, Any]) -> Event | ErrorEvent:
+@dataclass
+class AgentInfo:
+    """One callable agent returned by ``agents.listed``."""
+
+    agent_id: str
+    name: str
+    role: str
+    is_default: bool
+    status: str
+
+
+@dataclass
+class AgentsListedEvent:
+    """``agents.listed``, emitted in response to ``listAgents``."""
+
+    type: str
+    version: str
+    agents: list[AgentInfo]
+    raw: dict[str, Any]
+    request_id: str | None = None
+
+
+def parse_event(frame: dict[str, Any]) -> Event | ErrorEvent | AgentsListedEvent:
     """Parse a decoded inbound frame into a typed event.
 
     Unknown ``type`` values fall back to the base :class:`Event` so forward-
@@ -100,6 +123,15 @@ def parse_event(frame: dict[str, Any]) -> Event | ErrorEvent:
             message=frame.get("message", ""),
             request_id=frame.get("requestId"),
             question=frame.get("question"),
+            raw=frame,
+        )
+
+    if frame_type == EventType.AGENTS_LISTED:
+        return AgentsListedEvent(
+            type=frame_type,
+            version=frame.get("version", ""),
+            request_id=frame.get("requestId"),
+            agents=_agents(frame.get("agents")),
             raw=frame,
         )
 
@@ -130,6 +162,25 @@ def parse_event(frame: dict[str, Any]) -> Event | ErrorEvent:
         )
 
     return Event(**base)
+
+
+def _agents(value: Any) -> list[AgentInfo]:
+    if not isinstance(value, list):
+        return []
+    agents = []
+    for row in value:
+        if not isinstance(row, dict):
+            continue
+        agents.append(
+            AgentInfo(
+                agent_id=row.get("agentId", ""),
+                name=row.get("name", ""),
+                role=row.get("role", ""),
+                is_default=row.get("isDefault") is True,
+                status=row.get("status", ""),
+            )
+        )
+    return agents
 
 
 def is_terminal(event: Event) -> bool:

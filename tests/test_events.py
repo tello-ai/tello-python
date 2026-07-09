@@ -1,5 +1,6 @@
-from tello.commands import answer_frame, cancel_frame, create_call_frame
+from tello.commands import answer_frame, cancel_frame, create_call_frame, list_agents_frame
 from tello.events import (
+    AgentsListedEvent,
     ErrorEvent,
     EventType,
     StatusChangedEvent,
@@ -34,6 +35,11 @@ def test_create_call_frame_omits_optional_fields():
 def test_answer_and_cancel_frames():
     assert answer_frame("yo", "m1") == {"event": "answer", "data": {"text": "yo", "messageId": "m1"}}
     assert cancel_frame() == {"event": "cancel", "data": {}}
+
+
+def test_list_agents_frame_uses_request_id_when_provided():
+    assert list_agents_frame("agents-1") == {"event": "listAgents", "data": {"requestId": "agents-1"}}
+    assert list_agents_frame() == {"event": "listAgents", "data": {}}
 
 
 def test_parse_user_turn():
@@ -82,6 +88,32 @@ def test_parse_call_rejected_carries_question():
     )
     assert isinstance(event, ErrorEvent)
     assert event.question == "why?"
+
+
+def test_parse_agents_listed():
+    event = parse_event(
+        {
+            "type": "agents.listed",
+            "version": "1.0",
+            "requestId": "agents-1",
+            "agents": [
+                {
+                    "agentId": "agent-1",
+                    "name": "예약 확인",
+                    "role": "AI 상담원",
+                    "isDefault": True,
+                    "status": "published",
+                }
+            ],
+        }
+    )
+    assert isinstance(event, AgentsListedEvent)
+    assert event.request_id == "agents-1"
+    assert event.agents[0].agent_id == "agent-1"
+    assert event.agents[0].name == "예약 확인"
+    assert event.agents[0].role == "AI 상담원"
+    assert event.agents[0].is_default is True
+    assert event.agents[0].status == "published"
 
 
 def test_terminal_detection():
@@ -152,5 +184,6 @@ def test_unknown_event_type_falls_back_to_base_event():
 
 def test_event_type_constants():
     assert EventType.USER_TURN == "user.turn"
+    assert EventType.AGENTS_LISTED == "agents.listed"
     assert EventType.CALL_STATUS_CHANGED == "call.statusChanged"
     assert EventType.CALL_NO_ANSWER == "call.noAnswer"

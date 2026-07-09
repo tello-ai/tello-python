@@ -44,5 +44,12 @@ def cancel_frame() -> dict[str, Any]:
     return {"event": "cancel", "data": {}}
 
 
+def list_agents_frame(request_id: str | None = None) -> dict[str, Any]:
+    data: dict[str, Any] = {}
+    if request_id is not None:
+        data["requestId"] = request_id
+    return {"event": "listAgents", "data": data}
+
+
 def encode(frame: dict[str, Any]) -> str:
     return json.dumps(frame)

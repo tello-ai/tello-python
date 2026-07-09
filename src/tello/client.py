@@ -31,7 +31,7 @@ from typing import Any
 import websockets
 from websockets.exceptions import ConnectionClosed
 
-from .commands import answer_frame, cancel_frame, create_call_frame, encode
+from .commands import answer_frame, cancel_frame, create_call_frame, encode, list_agents_frame
 from .config import DEFAULT_URL, ENV_API_KEY, ENV_URL, ClientConfig
 from .errors import (
     AuthenticationError,
@@ -176,6 +176,10 @@ class TelloClient(EventEmitter):
         """Cancel the active call (no-op server-side if none active)."""
         await self._send(cancel_frame())
 
+    async def list_agents(self, request_id: str | None = None) -> None:
+        """Request callable agents for the authenticated account."""
+        await self._send(list_agents_frame(request_id))
+
     async def _send(self, frame: dict[str, Any]) -> None:
         if self._ws is None:
             raise self._close_exc or ConnectionClosedError("client is not connected")
@@ -239,7 +243,7 @@ class TelloClient(EventEmitter):
         # call, _call_gen advances and we must not re-set _call_done for it.
         gen = self._call_gen
         await self._safe_emit(event.type, event)
-        if is_terminal(event) and self._call_gen == gen:
+        if isinstance(event, Event) and is_terminal(event) and self._call_gen == gen:
             self._active = False
             self._call_done.set()
 

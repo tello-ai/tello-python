@@ -30,6 +30,8 @@ from .errors import (
     ValidationError,
 )
 from .events import (
+    AgentInfo,
+    AgentsListedEvent,
     ErrorEvent,
     Event,
     EventType,
@@ -48,6 +50,8 @@ __all__ = [
     "DEFAULT_URL",
     "EventType",
     "Event",
+    "AgentInfo",
+    "AgentsListedEvent",
     "TurnEvent",
     "StatusChangedEvent",
     "TerminalEvent",
