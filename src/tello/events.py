@@ -23,6 +23,8 @@ class EventType:
     USER_TURN = "user.turn"
     AGENT_TURN = "agent.turn"
     AGENTS_LISTED = "agents.listed"
+    CALL_SUMMARY = "call.summary"
+    SMS_SENT = "sms.sent"
     CALL_STATUS_CHANGED = "call.statusChanged"
     CALL_COMPLETED = "call.completed"
     CALL_NO_ANSWER = "call.noAnswer"
@@ -107,7 +109,40 @@ class AgentsListedEvent:
     request_id: str | None = None
 
 
-def parse_event(frame: dict[str, Any]) -> Event | ErrorEvent | AgentsListedEvent:
+@dataclass
+class CallSummaryEvent:
+    """``call.summary``, emitted in response to ``getSummary``."""
+
+    type: str
+    version: str
+    call_id: str
+    status: str
+    duration_seconds: int | None
+    transcript: str | None
+    summary: str | None
+    credit_charged: int | None
+    raw: dict[str, Any]
+    request_id: str | None = None
+
+
+@dataclass
+class SmsSentEvent:
+    """``sms.sent``, emitted in response to ``sendSms``."""
+
+    type: str
+    version: str
+    sms_id: str
+    status: str
+    to: str
+    message_preview: str
+    raw: dict[str, Any]
+    request_id: str | None = None
+    call_id: str | None = None
+
+
+def parse_event(
+    frame: dict[str, Any],
+) -> Event | ErrorEvent | AgentsListedEvent | CallSummaryEvent | SmsSentEvent:
     """Parse a decoded inbound frame into a typed event.
 
     Unknown ``type`` values fall back to the base :class:`Event` so forward-
@@ -132,6 +167,33 @@ def parse_event(frame: dict[str, Any]) -> Event | ErrorEvent | AgentsListedEvent
             version=frame.get("version", ""),
             request_id=frame.get("requestId"),
             agents=_agents(frame.get("agents")),
+            raw=frame,
+        )
+
+    if frame_type == EventType.CALL_SUMMARY:
+        return CallSummaryEvent(
+            type=frame_type,
+            version=frame.get("version", ""),
+            request_id=frame.get("requestId"),
+            call_id=frame.get("callId", ""),
+            status=frame.get("status", ""),
+            duration_seconds=frame.get("durationSeconds"),
+            transcript=frame.get("transcript"),
+            summary=frame.get("summary"),
+            credit_charged=frame.get("creditCharged"),
+            raw=frame,
+        )
+
+    if frame_type == EventType.SMS_SENT:
+        return SmsSentEvent(
+            type=frame_type,
+            version=frame.get("version", ""),
+            request_id=frame.get("requestId"),
+            sms_id=frame.get("smsId", ""),
+            status=frame.get("status", ""),
+            to=frame.get("to", ""),
+            message_preview=frame.get("messagePreview", ""),
+            call_id=frame.get("callId"),
             raw=frame,
         )
 

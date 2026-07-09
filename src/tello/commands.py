@@ -51,5 +51,26 @@ def list_agents_frame(request_id: str | None = None) -> dict[str, Any]:
     return {"event": "listAgents", "data": data}
 
 
+def get_summary_frame(call_id: str, request_id: str | None = None) -> dict[str, Any]:
+    data: dict[str, Any] = {"callId": call_id}
+    if request_id is not None:
+        data["requestId"] = request_id
+    return {"event": "getSummary", "data": data}
+
+
+def send_sms_frame(
+    to: str,
+    message: str,
+    call_id: str | None = None,
+    request_id: str | None = None,
+) -> dict[str, Any]:
+    data: dict[str, Any] = {"to": to, "message": message}
+    if call_id is not None:
+        data["callId"] = call_id
+    if request_id is not None:
+        data["requestId"] = request_id
+    return {"event": "sendSms", "data": data}
+
+
 def encode(frame: dict[str, Any]) -> str:
     return json.dumps(frame)

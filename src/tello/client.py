@@ -31,7 +31,15 @@ from typing import Any
 import websockets
 from websockets.exceptions import ConnectionClosed
 
-from .commands import answer_frame, cancel_frame, create_call_frame, encode, list_agents_frame
+from .commands import (
+    answer_frame,
+    cancel_frame,
+    create_call_frame,
+    encode,
+    get_summary_frame,
+    list_agents_frame,
+    send_sms_frame,
+)
 from .config import DEFAULT_URL, ENV_API_KEY, ENV_URL, ClientConfig
 from .errors import (
     AuthenticationError,
@@ -179,6 +187,20 @@ class TelloClient(EventEmitter):
     async def list_agents(self, request_id: str | None = None) -> None:
         """Request callable agents for the authenticated account."""
         await self._send(list_agents_frame(request_id))
+
+    async def get_summary(self, call_id: str, request_id: str | None = None) -> None:
+        """Request a completed call summary."""
+        await self._send(get_summary_frame(call_id, request_id))
+
+    async def send_sms(
+        self,
+        to: str,
+        message: str,
+        call_id: str | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        """Send an SMS through the authenticated account."""
+        await self._send(send_sms_frame(to, message, call_id, request_id))
 
     async def _send(self, frame: dict[str, Any]) -> None:
         if self._ws is None:

@@ -1,8 +1,10 @@
-from tello.commands import answer_frame, cancel_frame, create_call_frame, list_agents_frame
+from tello.commands import answer_frame, cancel_frame, create_call_frame, get_summary_frame, list_agents_frame, send_sms_frame
 from tello.events import (
     AgentsListedEvent,
+    CallSummaryEvent,
     ErrorEvent,
     EventType,
+    SmsSentEvent,
     StatusChangedEvent,
     TerminalEvent,
     TurnEvent,
@@ -40,6 +42,17 @@ def test_answer_and_cancel_frames():
 def test_list_agents_frame_uses_request_id_when_provided():
     assert list_agents_frame("agents-1") == {"event": "listAgents", "data": {"requestId": "agents-1"}}
     assert list_agents_frame() == {"event": "listAgents", "data": {}}
+
+
+def test_summary_and_sms_frames():
+    assert get_summary_frame("call-1", "summary-1") == {
+        "event": "getSummary",
+        "data": {"callId": "call-1", "requestId": "summary-1"},
+    }
+    assert send_sms_frame("01012345678", "예약 확인", "call-1", "sms-1") == {
+        "event": "sendSms",
+        "data": {"to": "01012345678", "message": "예약 확인", "callId": "call-1", "requestId": "sms-1"},
+    }
 
 
 def test_parse_user_turn():
@@ -116,6 +129,44 @@ def test_parse_agents_listed():
     assert event.agents[0].status == "published"
 
 
+def test_parse_call_summary_and_sms_sent():
+    summary = parse_event(
+        {
+            "type": "call.summary",
+            "version": "1.0",
+            "requestId": "summary-1",
+            "callId": "call-1",
+            "status": "completed",
+            "durationSeconds": 42,
+            "transcript": "고객: 예약 확인",
+            "summary": "예약 확인 완료",
+            "creditCharged": 15,
+        }
+    )
+    assert isinstance(summary, CallSummaryEvent)
+    assert (summary.request_id, summary.call_id, summary.duration_seconds, summary.credit_charged) == (
+        "summary-1",
+        "call-1",
+        42,
+        15,
+    )
+
+    sms = parse_event(
+        {
+            "type": "sms.sent",
+            "version": "1.0",
+            "requestId": "sms-1",
+            "smsId": "77",
+            "status": "queued",
+            "to": "01012345678",
+            "messagePreview": "예약 확인",
+            "callId": "call-1",
+        }
+    )
+    assert isinstance(sms, SmsSentEvent)
+    assert (sms.request_id, sms.sms_id, sms.status, sms.call_id) == ("sms-1", "77", "queued", "call-1")
+
+
 def test_terminal_detection():
     completed = parse_event(
         {
@@ -185,5 +236,7 @@ def test_unknown_event_type_falls_back_to_base_event():
 def test_event_type_constants():
     assert EventType.USER_TURN == "user.turn"
     assert EventType.AGENTS_LISTED == "agents.listed"
+    assert EventType.CALL_SUMMARY == "call.summary"
+    assert EventType.SMS_SENT == "sms.sent"
     assert EventType.CALL_STATUS_CHANGED == "call.statusChanged"
     assert EventType.CALL_NO_ANSWER == "call.noAnswer"
