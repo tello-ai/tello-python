@@ -161,7 +161,7 @@ func (c *Client) dispatch(gen int, frame map[string]any) {
 		c.mu.Lock()
 		if event.Code == "unauthenticated" {
 			c.closeErr = err
-		} else if c.active && event.Code != "no_active_call" && event.Code != "call_already_active" {
+		} else if c.active && event.Code != "noActiveCall" && event.Code != "callAlreadyActive" {
 			c.callErr = err
 			c.active = false
 			closeIfOpen(c.callDone)

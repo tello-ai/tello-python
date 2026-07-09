@@ -26,11 +26,12 @@ RAW_KEY = "sdk-secret"
 def _status_changed(status, previous):
     return json.dumps(
         {
-            "type": "call.status_changed",
+            "type": "call.statusChanged",
             "version": "1.0",
-            "call_id": "call-1",
+            "sessionId": "session-1",
+            "callId": "call-1",
             "status": status,
-            "previous_status": previous,
+            "previousStatus": previous,
             "timestamp": "2026-07-01T00:00:00.000Z",
         }
     )
@@ -41,8 +42,9 @@ def _user_turn(index, text):
         {
             "type": "user.turn",
             "version": "1.0",
-            "call_id": "call-1",
-            "turn_index": index,
+            "sessionId": "session-1",
+            "callId": "call-1",
+            "turnIndex": index,
             "text": text,
             "timestamp": "2026-07-01T00:00:01.000Z",
         }
@@ -54,8 +56,9 @@ def _agent_turn(index, text):
         {
             "type": "agent.turn",
             "version": "1.0",
-            "call_id": "call-1",
-            "turn_index": index,
+            "sessionId": "session-1",
+            "callId": "call-1",
+            "turnIndex": index,
             "text": text,
             "timestamp": "2026-07-01T00:00:01.500Z",
         }
@@ -67,7 +70,8 @@ def _completed():
         {
             "type": "call.completed",
             "version": "1.0",
-            "call_id": "call-1",
+            "sessionId": "session-1",
+            "callId": "call-1",
             "status": "completed",
             "timestamp": "2026-07-01T00:00:02.000Z",
         }
@@ -77,7 +81,7 @@ def _completed():
 def _error(code, message, request_id=None):
     frame = {"type": "error", "version": "1.0", "code": code, "message": message}
     if request_id is not None:
-        frame["request_id"] = request_id
+        frame["requestId"] = request_id
     return json.dumps(frame)
 
 
@@ -103,17 +107,17 @@ def make_gateway(
             if event == "create_call":
                 if not data.get("to"):
                     # rejected create: send error, keep socket open, no terminal
-                    await ws.send(_error("to_required", "to is required", data.get("requestId")))
+                    await ws.send(_error("toRequired", "to is required", data.get("requestId")))
                     continue
                 if not data.get("agentId"):
                     # rejected create: send error, keep socket open, no terminal
-                    await ws.send(_error("agent_id_required", "agentId is required", data.get("requestId")))
+                    await ws.send(_error("agentIdRequired", "agentId is required", data.get("requestId")))
                     continue
                 if close_4429:
                     await ws.close(4429, "session replaced")
                     return
                 active = True
-                await ws.send(_status_changed("in_progress", "queued"))
+                await ws.send(_status_changed("inProgress", "queued"))
                 if scalar_frame:
                     await ws.send(json.dumps(123))  # valid JSON, non-object
                 await ws.send(_user_turn(1, "Need help"))
@@ -128,7 +132,7 @@ def make_gateway(
                     active = False
             elif event == "answer":
                 if not active:
-                    await ws.send(_error("no_active_call", "No active call", data.get("requestId")))
+                    await ws.send(_error("noActiveCall", "No active call", data.get("requestId")))
                     continue
                 await ws.send(_agent_turn(2, data.get("text", "")))
             elif event == "cancel":
@@ -158,7 +162,7 @@ async def test_happy_path_streams_contract_order():
             await client.create_call(to="+821012345678", agent_id="agent-1", prompt="call the clinic")
             await client.wait_closed()
 
-    assert seen == ["call.status_changed", "user.turn", "call.completed"]
+    assert seen == ["call.statusChanged", "user.turn", "call.completed"]
 
 
 async def test_user_turn_fields():
@@ -206,11 +210,11 @@ async def test_error_frame_echoes_request_id():
             def _(event):
                 errors.append((event.code, event.request_id))
 
-            # answer with no active call -> no_active_call error, request_id echoed
+            # answer with no active call -> noActiveCall error, requestId echoed
             await client.answer(text="hi", request_id="req-1")
             await asyncio.sleep(0.05)
 
-    assert errors == [("no_active_call", "req-1")]
+    assert errors == [("noActiveCall", "req-1")]
 
 
 async def test_unauthenticated_raises_from_wait_closed():

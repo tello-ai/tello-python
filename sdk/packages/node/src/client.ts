@@ -14,7 +14,7 @@ import { EventEmitter } from "./realtime.js";
 
 const CLOSE_UNAUTHENTICATED = 4401;
 const CLOSE_SESSION_REPLACED = 4429;
-const NON_ABORTING_ERROR_CODES = new Set(["no_active_call", "call_already_active"]);
+const NON_ABORTING_ERROR_CODES = new Set(["noActiveCall", "callAlreadyActive"]);
 
 type Deferred = {
   promise: Promise<void>;
@@ -179,6 +179,7 @@ export class TelloClient extends EventEmitter<TelloEvent> {
     await this.safeEmit(EventType.Disconnected, {
       type: EventType.Disconnected,
       version: "",
+      sessionId: "",
       callId: "",
       timestamp: "",
       raw: {},

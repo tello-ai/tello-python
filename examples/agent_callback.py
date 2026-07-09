@@ -4,8 +4,8 @@ Shows the full lifecycle and every inbound event:
 
 * explicit ``connect()`` / ``aclose()`` (``TelloClient(...)`` == ``new TelloClient``)
 * per-turn response generation with conversation history
-* answering `user.turn`, observing `agent.turn` / `call.status_changed`
-* all terminal states (`completed` / `no_answer` / `failed`) and `error`
+* answering `user.turn`, observing `agent.turn` / `call.statusChanged`
+* all terminal states (`completed` / `noAnswer` / `failed`) and `error`
 * ending the call early with `cancel()` on an intent keyword
 * mapping error frames / auth failure to exceptions
 
@@ -78,7 +78,7 @@ async def run(agent: Agent, client: TelloClient) -> None:
 
     @client.on(EventType.CALL_NO_ANSWER)
     def on_no_answer(event) -> None:
-        print(f"[no_answer] reason={event.failure_reason}")
+        print(f"[noAnswer] reason={event.failure_reason}")
 
     @client.on(EventType.CALL_FAILED)
     def on_failed(event) -> None:

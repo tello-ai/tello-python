@@ -77,17 +77,17 @@ func TestClientEmitsUserTurnsAndSurfacesCallRejection(t *testing.T) {
 			return
 		}
 		_ = conn.WriteJSON(map[string]any{
-			"type":       "user.turn",
-			"version":    "1.0",
-			"call_id":    "c1",
-			"turn_index": 1,
-			"text":       "hello",
-			"timestamp":  "t",
+			"type":      "user.turn",
+			"version":   "1.0",
+			"callId":    "c1",
+			"turnIndex": 1,
+			"text":      "hello",
+			"timestamp": "t",
 		})
 		_ = conn.WriteJSON(map[string]any{
 			"type":     "error",
 			"version":  "1.0",
-			"code":     "call_rejected",
+			"code":     "callRejected",
 			"message":  "Call rejected",
 			"question": "why?",
 		})
@@ -187,7 +187,7 @@ func TestClientIgnoresStaleCloseFromPreviousConnection(t *testing.T) {
 		_ = conn.WriteJSON(map[string]any{
 			"type":      "call.completed",
 			"version":   "1.0",
-			"call_id":   "c1",
+			"callId":    "c1",
 			"status":    "completed",
 			"timestamp": "t",
 		})

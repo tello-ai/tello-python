@@ -231,7 +231,7 @@ sdk/contracts/protocol/sdk-ws.v1.md
   - 아웃바운드(client→server): `{"event":"<command>","data":{...}}`
   - 인바운드(server→client): flat `{"type":"<event>","version":"1.0", ...}`
 - 명령: `create_call` / `answer` / `cancel`
-- 이벤트: `call.status_changed` / `user.turn` / `agent.turn` / `call.completed` / `call.no_answer` / `call.failed`
+- 이벤트: `call.statusChanged` / `user.turn` / `agent.turn` / `call.completed` / `call.noAnswer` / `call.failed`
 - 에러 프레임과 close code
 - 하트비트(서버 ping → 클라 pong)
 
@@ -251,14 +251,15 @@ sdk/contracts/events/sdk-events.v1.schema.json
 {
   "type": "user.turn",
   "version": "1.0",
-  "call_id": "call_123",
-  "turn_index": 1,
+  "sessionId": "session_123",
+  "callId": "call_123",
+  "turnIndex": 1,
   "text": "예약 확인하려고 전화했습니다.",
   "timestamp": "2026-06-29T10:00:00Z"
 }
 ```
 
-필드는 snake_case이며 모든 이벤트는 `type`, `version`, `call_id`, `timestamp`를 공통으로 갖는다. 이벤트 `type` 추가는 허용한다. 기존 필드 삭제, 타입 변경, 의미 변경은 금지한다.
+필드는 camelCase이며 모든 이벤트는 `type`, `version`, `sessionId`, `callId`, `timestamp`를 공통으로 갖는다. 이벤트 `type` 추가는 허용한다. 기존 필드 삭제, 타입 변경, 의미 변경은 금지한다.
 
 ### 3.3 에러 스키마
 
@@ -274,13 +275,13 @@ sdk/contracts/errors/errors.v1.json
 {
   "type": "error",
   "version": "1.0",
-  "code": "no_active_call",
+  "code": "noActiveCall",
   "message": "No active call",
-  "request_id": "req_123"
+  "requestId": "req_123"
 }
 ```
 
-`code` 목록: `unauthenticated`, `call_already_active`, `to_required`, `agent_id_required`, `no_active_call`, `call_rejected`, `internal_error`. `request_id`는 클라이언트가 명령에 `requestId`를 넣었을 때만 에코된다. `call_rejected`는 `question` 필드를 동반할 수 있다.
+`code` 목록: `unauthenticated`, `callAlreadyActive`, `toRequired`, `agentIdRequired`, `noActiveCall`, `callRejected`, `internalError`. `requestId`는 클라이언트가 명령에 `requestId`를 넣었을 때만 에코된다. `callRejected`는 `question` 필드를 동반할 수 있다.
 
 ---
 
@@ -326,12 +327,12 @@ gateway 에러 코드를 SDK 예외 타입으로 1:1 매핑한다.
 | gateway `code` | SDK 예외 |
 | --- | --- |
 | `unauthenticated` | `AuthenticationError` |
-| `to_required` | `ValidationError` |
-| `agent_id_required` | `ValidationError` |
-| `call_already_active` | `CallAlreadyActiveError` |
-| `no_active_call` | `NoActiveCallError` |
-| `call_rejected` | `CallRejectedError` (`question` 포함) |
-| `internal_error` | `TelloServerError` |
+| `toRequired` | `ValidationError` |
+| `agentIdRequired` | `ValidationError` |
+| `callAlreadyActive` | `CallAlreadyActiveError` |
+| `noActiveCall` | `NoActiveCallError` |
+| `callRejected` | `CallRejectedError` (`question` 포함) |
+| `internalError` | `TelloServerError` |
 
 연결 인증 실패 close(`4401`)도 `AuthenticationError`로 매핑한다.
 
@@ -792,7 +793,7 @@ SDK 릴리스 전 최소 테스트:
 - 연결 실패(4401) → AuthenticationError 매핑
 - 명령 프레임 봉투(`{event,data}`) 직렬화 검증
 - 인바운드 flat 이벤트 프레임 parse
-- 에러 프레임 code → 예외 매핑 (`request_id` 에코 포함)
+- 에러 프레임 code → 예외 매핑 (`requestId` 에코 포함)
 - 하트비트 pong 응답(연결 유지)
 - pub/sub 핸들러 디스패치(동기·비동기)
 - contract fixture 호환성
@@ -850,7 +851,7 @@ asyncio.run(main())
 v0.1.0
   - WS 연결 + 인증(Bearer)
   - create_call() / answer() / cancel()
-  - turn 이벤트 pub/sub (user.turn / agent.turn / call.status_changed / call.*)
+  - turn 이벤트 pub/sub (user.turn / agent.turn / call.statusChanged / call.*)
   - 에러 프레임 매핑, 하트비트 pong
   - basic example
 

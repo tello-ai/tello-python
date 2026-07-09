@@ -23,19 +23,19 @@ class AuthenticationError(TelloError):
 
 
 class ValidationError(TelloError):
-    """A command was rejected as invalid (for example ``to_required``)."""
+    """A command was rejected as invalid (for example ``toRequired``)."""
 
 
 class CallAlreadyActiveError(TelloError):
-    """A call is already active on this connection (``call_already_active``)."""
+    """A call is already active on this connection (``callAlreadyActive``)."""
 
 
 class NoActiveCallError(TelloError):
-    """No active call for the attempted command (``no_active_call``)."""
+    """No active call for the attempted command (``noActiveCall``)."""
 
 
 class CallRejectedError(TelloError):
-    """The call was rejected by intent validation (``call_rejected``).
+    """The call was rejected by intent validation (``callRejected``).
 
     ``question`` carries the clarifying question the gateway returned.
     """
@@ -46,17 +46,17 @@ class CallRejectedError(TelloError):
 
 
 class TelloServerError(TelloError):
-    """Gateway-side internal error (``internal_error``)."""
+    """Gateway-side internal error (``internalError``)."""
 
 
 _CODE_TO_EXCEPTION: dict[str, type[TelloError]] = {
     "unauthenticated": AuthenticationError,
-    "to_required": ValidationError,
-    "agent_id_required": ValidationError,
-    "call_already_active": CallAlreadyActiveError,
-    "no_active_call": NoActiveCallError,
-    "call_rejected": CallRejectedError,
-    "internal_error": TelloServerError,
+    "toRequired": ValidationError,
+    "agentIdRequired": ValidationError,
+    "callAlreadyActive": CallAlreadyActiveError,
+    "noActiveCall": NoActiveCallError,
+    "callRejected": CallRejectedError,
+    "internalError": TelloServerError,
 }
 
 

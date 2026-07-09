@@ -6,13 +6,13 @@ import (
 )
 
 func TestErrorForMapsCodes(t *testing.T) {
-	err := ErrorFor("no_active_call", "No active call", "")
+	err := ErrorFor("noActiveCall", "No active call", "")
 	var noActive *NoActiveCallError
 	if !errors.As(err, &noActive) {
 		t.Fatalf("expected NoActiveCallError, got %T", err)
 	}
 
-	err = ErrorFor("to_required", "to is required", "")
+	err = ErrorFor("toRequired", "to is required", "")
 	var validation *ValidationError
 	if !errors.As(err, &validation) {
 		t.Fatalf("expected ValidationError, got %T", err)
@@ -20,7 +20,7 @@ func TestErrorForMapsCodes(t *testing.T) {
 }
 
 func TestCallRejectedPreservesQuestion(t *testing.T) {
-	err := ErrorFor("call_rejected", "Call rejected", "why?")
+	err := ErrorFor("callRejected", "Call rejected", "why?")
 	var rejected *CallRejectedError
 	if !errors.As(err, &rejected) {
 		t.Fatalf("expected CallRejectedError, got %T", err)

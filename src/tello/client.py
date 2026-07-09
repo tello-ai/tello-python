@@ -48,10 +48,10 @@ logger = logging.getLogger("tello")
 _CLOSE_UNAUTHENTICATED = 4401
 _CLOSE_SESSION_REPLACED = 4429
 
-# Error codes that do NOT abort a pending create_call wait: no_active_call is
-# benign, and call_already_active means an existing call is still running and
+# Error codes that do NOT abort a pending create_call wait: noActiveCall is
+# benign, and callAlreadyActive means an existing call is still running and
 # will produce its own terminal event.
-_NON_ABORTING_ERROR_CODES = frozenset({"no_active_call", "call_already_active"})
+_NON_ABORTING_ERROR_CODES = frozenset({"noActiveCall", "callAlreadyActive"})
 
 
 class TelloClient(EventEmitter):
@@ -267,10 +267,18 @@ class TelloClient(EventEmitter):
         if self._active and self._close_exc is None and self._call_error is None:
             self._close_exc = ConnectionClosedError("connection closed before call terminated")
         # Surface disconnect to subscribers as a typed Event, then unblock any
-        # waiter. call_id/timestamp are empty: this is an SDK-local pseudo-event.
+        # waiter. session_id/call_id/timestamp are empty: this is an SDK-local
+        # pseudo-event.
         await self._safe_emit(
             EventType.DISCONNECTED,
-            Event(type=EventType.DISCONNECTED, version="", call_id="", timestamp="", raw={}),
+            Event(
+                type=EventType.DISCONNECTED,
+                version="",
+                session_id="",
+                call_id="",
+                timestamp="",
+                raw={},
+            ),
         )
         self._closed.set()
         self._call_done.set()

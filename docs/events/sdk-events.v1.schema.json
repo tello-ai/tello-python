@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tello.ai/schemas/sdk-events.v1.schema.json",
   "title": "Tello SDK WebSocket Events",
-  "description": "Inbound flat frames sent by turn-provider-gateway /sdk to SDK clients. Dispatch on `type`.",
+  "description": "Inbound flat frames sent by turn-provider-gateway /sdk to SDK clients. Dispatch on `type`. All keys are camelCase.",
   "oneOf": [
     { "$ref": "#/$defs/callStatusChanged" },
     { "$ref": "#/$defs/userTurn" },
@@ -14,44 +14,45 @@
   "$defs": {
     "base": {
       "type": "object",
-      "required": ["type", "version", "call_id", "timestamp"],
+      "required": ["type", "version", "sessionId", "callId", "timestamp"],
       "properties": {
         "type": { "type": "string" },
         "version": { "type": "string", "const": "1.0" },
-        "call_id": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "callId": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" }
       }
     },
     "status": {
       "type": "string",
-      "enum": ["queued", "dialing", "ringing", "in_progress", "transferring", "completed", "no_answer", "failed", "cancelled"]
+      "enum": ["queued", "dialing", "ringing", "inProgress", "transferring", "completed", "noAnswer", "failed", "cancelled"]
     },
     "callStatusChanged": {
       "allOf": [{ "$ref": "#/$defs/base" }],
       "properties": {
-        "type": { "const": "call.status_changed" },
+        "type": { "const": "call.statusChanged" },
         "status": { "$ref": "#/$defs/status" },
-        "previous_status": { "$ref": "#/$defs/status" }
+        "previousStatus": { "$ref": "#/$defs/status" }
       },
-      "required": ["status", "previous_status"]
+      "required": ["status", "previousStatus"]
     },
     "userTurn": {
       "allOf": [{ "$ref": "#/$defs/base" }],
       "properties": {
         "type": { "const": "user.turn" },
-        "turn_index": { "type": "integer" },
+        "turnIndex": { "type": "integer" },
         "text": { "type": "string" }
       },
-      "required": ["turn_index", "text"]
+      "required": ["turnIndex", "text"]
     },
     "agentTurn": {
       "allOf": [{ "$ref": "#/$defs/base" }],
       "properties": {
         "type": { "const": "agent.turn" },
-        "turn_index": { "type": "integer" },
+        "turnIndex": { "type": "integer" },
         "text": { "type": "string" }
       },
-      "required": ["turn_index", "text"]
+      "required": ["turnIndex", "text"]
     },
     "callCompleted": {
       "allOf": [{ "$ref": "#/$defs/base" }],
@@ -64,9 +65,9 @@
     "callNoAnswer": {
       "allOf": [{ "$ref": "#/$defs/base" }],
       "properties": {
-        "type": { "const": "call.no_answer" },
-        "status": { "const": "no_answer" },
-        "failure_reason": { "type": "string" }
+        "type": { "const": "call.noAnswer" },
+        "status": { "const": "noAnswer" },
+        "failureReason": { "type": "string" }
       },
       "required": ["status"]
     },
@@ -75,7 +76,7 @@
       "properties": {
         "type": { "const": "call.failed" },
         "status": { "const": "failed" },
-        "failure_reason": { "type": "string" }
+        "failureReason": { "type": "string" }
       },
       "required": ["status"]
     }

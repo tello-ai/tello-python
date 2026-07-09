@@ -7,17 +7,17 @@
       "version": "1.0",
       "code": "string",
       "message": "string",
-      "request_id": "string (optional, echoes the client's requestId on the failed command)",
-      "question": "string (optional, present for call_rejected)"
+      "requestId": "string (optional, echoes the client's requestId on the failed command)",
+      "question": "string (optional, present for callRejected)"
     }
   },
   "errors": [
     { "code": "unauthenticated", "message": "Authentication required", "closeCode": 4401, "sdkException": "AuthenticationError" },
-    { "code": "call_already_active", "message": "A call is already active", "sdkException": "CallAlreadyActiveError" },
-    { "code": "to_required", "message": "to is required", "sdkException": "ValidationError" },
-    { "code": "agent_id_required", "message": "agentId is required", "sdkException": "ValidationError" },
-    { "code": "no_active_call", "message": "No active call", "sdkException": "NoActiveCallError" },
-    { "code": "call_rejected", "message": "Call rejected", "sdkException": "CallRejectedError", "extra": ["question"] },
-    { "code": "internal_error", "message": "Internal error", "sdkException": "TelloServerError" }
+    { "code": "callAlreadyActive", "message": "A call is already active", "sdkException": "CallAlreadyActiveError" },
+    { "code": "toRequired", "message": "to is required", "sdkException": "ValidationError" },
+    { "code": "agentIdRequired", "message": "agentId is required", "sdkException": "ValidationError" },
+    { "code": "noActiveCall", "message": "No active call", "sdkException": "NoActiveCallError" },
+    { "code": "callRejected", "message": "Call rejected", "sdkException": "CallRejectedError", "extra": ["question"] },
+    { "code": "internalError", "message": "Internal error", "sdkException": "TelloServerError" }
   ]
 }

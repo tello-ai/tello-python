@@ -35,26 +35,26 @@ HTTP upgrade 요청에서 API key를 다음 순서로 읽는다.
 - **인바운드(server → client)**: 봉투 없이 **flat** 프레임이다. `type` 필드로 디스패치한다.
 
   ```json
-  { "type": "<event>", "version": "1.0", "call_id": "...", "timestamp": "..." }
+  { "type": "<event>", "version": "1.0", "sessionId": "...", "callId": "...", "timestamp": "..." }
   ```
 
 ## 4. 명령 (client → server)
 
-`data` 안의 필드다. 모든 명령은 선택적 `requestId`를 가질 수 있고, 실패 시 error 프레임의 `request_id`로 에코된다.
+`data` 안의 필드다. 모든 명령은 선택적 `requestId`를 가질 수 있고, 실패 시 error 프레임의 `requestId`로 에코된다.
 
 ### 4.1 `create_call`
 
 ```json
 { "event": "create_call", "data": {
-  "to": "+821012345678",          // 필수. 전화할 대상 번호. 비면 error: to_required
-  "agentId": "agent-1",           // 필수. 비면 error: agent_id_required
+  "to": "+821012345678",          // 필수. 전화할 대상 번호. 비면 error: toRequired
+  "agentId": "agent-1",           // 필수. 비면 error: agentIdRequired
   "prompt": "예약 확인",           // 선택, 기본 ""
   "metadata": { "any": "json" },  // 선택
   "requestId": "req-1"            // 선택
 }}
 ```
 
-이미 활성 통화가 있으면 error `call_already_active`.
+이미 활성 통화가 있으면 error `callAlreadyActive`.
 
 ### 4.2 `answer`
 
@@ -66,7 +66,7 @@ HTTP upgrade 요청에서 API key를 다음 순서로 읽는다.
 }}
 ```
 
-활성 통화가 없으면 error `no_active_call`. 성공 시 `agent.turn` 이벤트가 온다.
+활성 통화가 없으면 error `noActiveCall`. 성공 시 `agent.turn` 이벤트가 온다.
 
 ### 4.3 `cancel`
 
@@ -78,38 +78,38 @@ HTTP upgrade 요청에서 API key를 다음 순서로 읽는다.
 
 ## 5. 이벤트 (server → client)
 
-스키마: `../events/sdk-events.v1.schema.json`. 공통 필드 `type`, `version` ("1.0"), `call_id`, `timestamp`(ISO-8601). 필드는 snake_case.
+스키마: `../events/sdk-events.v1.schema.json`. 공통 필드 `type`, `version` ("1.0"), `sessionId`, `callId`, `timestamp`(ISO-8601). 필드는 camelCase.
 
 | type | 추가 필드 | 의미 |
 | --- | --- | --- |
-| `call.status_changed` | `status`, `previous_status` | 통화 상태 전이. cancelled도 이 이벤트(status `"cancelled"`)로 온다 |
-| `user.turn` | `turn_index`, `text` | 상대방 발화. SDK가 응답할 차례 |
-| `agent.turn` | `turn_index`, `text` | SDK 답변이 통화로 반영됨 |
+| `call.statusChanged` | `status`, `previousStatus` | 통화 상태 전이. cancelled도 이 이벤트(status `"cancelled"`)로 온다 |
+| `user.turn` | `turnIndex`, `text` | 상대방 발화. SDK가 응답할 차례 |
+| `agent.turn` | `turnIndex`, `text` | SDK 답변이 통화로 반영됨 |
 | `call.completed` | `status` | 종단: 정상 완료 |
-| `call.no_answer` | `status`, `failure_reason?` | 종단: 무응답 |
-| `call.failed` | `status`, `failure_reason?` | 종단: 실패 |
+| `call.noAnswer` | `status`, `failureReason?` | 종단: 무응답 |
+| `call.failed` | `status`, `failureReason?` | 종단: 실패 |
 
-status 어휘: `queued`, `dialing`, `ringing`, `in_progress`, `transferring`, `completed`, `no_answer`, `failed`, `cancelled`.
+status 어휘: `queued`, `dialing`, `ringing`, `inProgress`, `transferring`, `completed`, `noAnswer`, `failed`, `cancelled`.
 
-종단 이벤트(`call.completed`/`call.no_answer`/`call.failed`, 또는 cancelled status_changed) 이후 서버는 해당 통화 스트림을 종료한다.
+종단 이벤트(`call.completed`/`call.noAnswer`/`call.failed`, 또는 cancelled statusChanged) 이후 서버는 해당 통화 스트림을 종료한다.
 
 ## 6. 에러 프레임
 
 스키마: `../errors/errors.v1.json`. 별도 봉투 없이 flat이다.
 
 ```json
-{ "type": "error", "version": "1.0", "code": "no_active_call", "message": "No active call", "request_id": "req-2" }
+{ "type": "error", "version": "1.0", "code": "noActiveCall", "message": "No active call", "requestId": "req-2" }
 ```
 
 | code | 기본 message | 비고 |
 | --- | --- | --- |
 | `unauthenticated` | Authentication required | 연결 시 발생, close 4401 동반 |
-| `call_already_active` | A call is already active | |
-| `to_required` | to is required | |
-| `agent_id_required` | agentId is required | |
-| `no_active_call` | No active call | |
-| `call_rejected` | Call rejected | `question` 필드 동반 가능 |
-| `internal_error` | Internal error | `message`에 상세 사유 |
+| `callAlreadyActive` | A call is already active | |
+| `toRequired` | to is required | |
+| `agentIdRequired` | agentId is required | |
+| `noActiveCall` | No active call | |
+| `callRejected` | Call rejected | `question` 필드 동반 가능 |
+| `internalError` | Internal error | `message`에 상세 사유 |
 
 명령 실패 error는 연결을 닫지 않는다.
 
@@ -129,4 +129,4 @@ heartbeat 타임아웃으로 인한 종료는 close 프레임 없이 소켓이 �
 ## 9. 비목표
 
 - 재연결 / 세션 resume 프로토콜 없음.
-- 성공 응답 ACK 없음(상관관계는 error의 `request_id` 에코뿐).
+- 성공 응답 ACK 없음(상관관계는 error의 `requestId` 에코뿐).

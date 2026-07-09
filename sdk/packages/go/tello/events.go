@@ -5,25 +5,26 @@ func ParseEvent(frame map[string]any) Event {
 	event := Event{
 		Type:      eventType,
 		Version:   stringValue(frame["version"]),
-		CallID:    stringValue(frame["call_id"]),
+		SessionID: stringValue(frame["sessionId"]),
+		CallID:    stringValue(frame["callId"]),
 		Timestamp: stringValue(frame["timestamp"]),
 		Raw:       frame,
 	}
 
 	switch eventType {
 	case EventTypeUserTurn, EventTypeAgentTurn:
-		event.TurnIndex = intValue(frame["turn_index"])
+		event.TurnIndex = intValue(frame["turnIndex"])
 		event.Text = stringValue(frame["text"])
 	case EventTypeCallStatusChanged:
 		event.Status = stringValue(frame["status"])
-		event.PreviousStatus = stringValue(frame["previous_status"])
+		event.PreviousStatus = stringValue(frame["previousStatus"])
 	case EventTypeCallCompleted, EventTypeCallNoAnswer, EventTypeCallFailed:
 		event.Status = stringValue(frame["status"])
-		event.FailureReason = stringValue(frame["failure_reason"])
+		event.FailureReason = stringValue(frame["failureReason"])
 	case EventTypeError:
 		event.Code = stringValue(frame["code"])
 		event.Message = stringValue(frame["message"])
-		event.RequestID = stringValue(frame["request_id"])
+		event.RequestID = stringValue(frame["requestId"])
 		event.Question = stringValue(frame["question"])
 	}
 
@@ -35,7 +36,7 @@ func IsTerminal(event Event) bool {
 	case EventTypeCallCompleted, EventTypeCallNoAnswer, EventTypeCallFailed:
 		return true
 	case EventTypeCallStatusChanged:
-		return event.Status == "cancelled"
+		return event.Status == StatusCancelled
 	default:
 		return false
 	}

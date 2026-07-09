@@ -1,7 +1,9 @@
 """Inbound event frames and their parser.
 
 Gateway -> client frames are **flat** (no ``{event, data}`` envelope) and are
-dispatched on the ``type`` field. See ``contracts/protocol/sdk-ws.v1.md`` and
+dispatched on the ``type`` field. Wire keys are camelCase (``callId``,
+``turnIndex``, ...); the parsed Python attributes stay snake_case. See
+``contracts/protocol/sdk-ws.v1.md`` and
 ``contracts/events/sdk-events.v1.schema.json``.
 """
 
@@ -20,9 +22,9 @@ class EventType:
 
     USER_TURN = "user.turn"
     AGENT_TURN = "agent.turn"
-    CALL_STATUS_CHANGED = "call.status_changed"
+    CALL_STATUS_CHANGED = "call.statusChanged"
     CALL_COMPLETED = "call.completed"
-    CALL_NO_ANSWER = "call.no_answer"
+    CALL_NO_ANSWER = "call.noAnswer"
     CALL_FAILED = "call.failed"
     ERROR = "error"
     DISCONNECTED = "disconnected"
@@ -39,6 +41,7 @@ class Event:
 
     type: str
     version: str
+    session_id: str
     call_id: str
     timestamp: str
     raw: dict[str, Any]
@@ -54,7 +57,7 @@ class TurnEvent(Event):
 
 @dataclass
 class StatusChangedEvent(Event):
-    """``call.status_changed`` (also carries the ``cancelled`` terminal status)."""
+    """``call.statusChanged`` (also carries the ``cancelled`` terminal status)."""
 
     status: str
     previous_status: str
@@ -62,7 +65,7 @@ class StatusChangedEvent(Event):
 
 @dataclass
 class TerminalEvent(Event):
-    """``call.completed`` / ``call.no_answer`` / ``call.failed``."""
+    """``call.completed`` / ``call.noAnswer`` / ``call.failed``."""
 
     status: str
     failure_reason: str | None = None
@@ -95,7 +98,7 @@ def parse_event(frame: dict[str, Any]) -> Event | ErrorEvent:
             version=frame.get("version", ""),
             code=frame.get("code", ""),
             message=frame.get("message", ""),
-            request_id=frame.get("request_id"),
+            request_id=frame.get("requestId"),
             question=frame.get("question"),
             raw=frame,
         )
@@ -103,26 +106,27 @@ def parse_event(frame: dict[str, Any]) -> Event | ErrorEvent:
     base = {
         "type": frame_type,
         "version": frame.get("version", ""),
-        "call_id": frame.get("call_id", ""),
+        "session_id": frame.get("sessionId", ""),
+        "call_id": frame.get("callId", ""),
         "timestamp": frame.get("timestamp", ""),
         "raw": frame,
     }
 
     if frame_type in (EventType.USER_TURN, EventType.AGENT_TURN):
-        return TurnEvent(**base, turn_index=frame.get("turn_index", 0), text=frame.get("text", ""))
+        return TurnEvent(**base, turn_index=frame.get("turnIndex", 0), text=frame.get("text", ""))
 
     if frame_type == EventType.CALL_STATUS_CHANGED:
         return StatusChangedEvent(
             **base,
             status=frame.get("status", ""),
-            previous_status=frame.get("previous_status", ""),
+            previous_status=frame.get("previousStatus", ""),
         )
 
     if frame_type in _TERMINAL_TYPES:
         return TerminalEvent(
             **base,
             status=frame.get("status", ""),
-            failure_reason=frame.get("failure_reason"),
+            failure_reason=frame.get("failureReason"),
         )
 
     return Event(**base)
@@ -131,7 +135,7 @@ def parse_event(frame: dict[str, Any]) -> Event | ErrorEvent:
 def is_terminal(event: Event) -> bool:
     """True if ``event`` ends the current call.
 
-    Terminal set = the three ``call.*`` terminals plus a ``call.status_changed``
+    Terminal set = the three ``call.*`` terminals plus a ``call.statusChanged``
     with status ``cancelled`` (how the gateway signals a cancelled call).
     """
     if event.type in _TERMINAL_TYPES:

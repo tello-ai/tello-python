@@ -71,8 +71,9 @@ describe("TelloClient", () => {
           JSON.stringify({
             type: "user.turn",
             version: "1.0",
-            call_id: "c1",
-            turn_index: 1,
+            sessionId: "s1",
+            callId: "c1",
+            turnIndex: 1,
             text: "hello",
             timestamp: "t",
           }),
@@ -81,7 +82,7 @@ describe("TelloClient", () => {
           JSON.stringify({
             type: "error",
             version: "1.0",
-            code: "call_rejected",
+            code: "callRejected",
             message: "Call rejected",
             question: "why?",
           }),
@@ -122,7 +123,8 @@ describe("TelloClient", () => {
             JSON.stringify({
               type: "call.completed",
               version: "1.0",
-              call_id: "c1",
+              sessionId: "s1",
+              callId: "c1",
               status: "completed",
               timestamp: "t",
             }),

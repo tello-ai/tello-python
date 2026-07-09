@@ -348,7 +348,7 @@ client.on('user.turn', async (event) => {
 });
 
 client.on('call.completed', (event) => {
-  console.log('통화 종료', event.call_id);
+  console.log('통화 종료', event.callId);
 });
 
 await client.createCall('+821012345678', 'agent-1', '예약 확인');
@@ -363,8 +363,9 @@ gateway → SDK로 오는 인바운드 프레임은 봉투 없이 flat이며 `ty
 {
   "type": "user.turn",
   "version": "1.0",
-  "call_id": "uuid",
-  "turn_index": 1,
+  "sessionId": "uuid",
+  "callId": "uuid",
+  "turnIndex": 1,
   "text": "STT 결과 텍스트",
   "timestamp": "2026-06-29T10:00:00Z"
 }
@@ -376,7 +377,7 @@ SDK → gateway 응답은 `answer` 명령 프레임(봉투 있음):
 { "event": "answer", "data": { "text": "가입자 AI가 생성한 응답 텍스트" } }
 ```
 
-통화를 끝내려면 `cancel` 명령을 보낸다. 통화 종단은 `call.completed` / `call.no_answer` / `call.failed` 이벤트로 통지된다.
+통화를 끝내려면 `cancel` 명령을 보낸다. 통화 종단은 `call.completed` / `call.noAnswer` / `call.failed` 이벤트로 통지된다.
 
 ### 5.5 연결 인증
 
@@ -779,7 +780,7 @@ tello-python/
 VGW → turn-provider-gateway
     │
     ▼ user.turn WS 프레임 push (봉투 없는 flat)
-    │   { type:"user.turn", call_id, turn_index, text, ... }
+    │   { type:"user.turn", sessionId, callId, turnIndex, text, ... }
     │
 가입자 앱 (SDK, outbound WS 연결)
     │ 이벤트 pub/sub 디스패치
@@ -973,7 +974,7 @@ VGW가 STT 완료 후 utterances 테이블에 기록하지 못하는 상황일 �
 
 **확인 순서:**
 1. `answer` 명령 프레임 형식 확인: `{ "event": "answer", "data": { "text": "..." } }` (봉투 필수)
-2. 활성 통화 여부 확인 — `no_active_call` 에러 프레임이 오는지 (create_call 성공 후에만 answer 가능)
+2. 활성 통화 여부 확인 — `noActiveCall` 에러 프레임이 오는지 (create_call 성공 후에만 answer 가능)
 3. WS 연결 유지 여부 — heartbeat ping에 pong 응답이 되는지 (표준 WS 라이브러리는 자동)
 
 ### Q4. FillerProcessor가 동작하지 않는다

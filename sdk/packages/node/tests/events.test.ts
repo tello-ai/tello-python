@@ -40,8 +40,9 @@ describe("events", () => {
     const event = parseEvent({
       type: "user.turn",
       version: "1.0",
-      call_id: "c1",
-      turn_index: 2,
+      sessionId: "s1",
+      callId: "c1",
+      turnIndex: 2,
       text: "hey",
       timestamp: "t",
     });
@@ -49,6 +50,7 @@ describe("events", () => {
     expect(event.type).toBe(EventType.UserTurn);
     expect(event.turnIndex).toBe(2);
     expect(event.text).toBe("hey");
+    expect(event.sessionId).toBe("s1");
     expect(event.callId).toBe("c1");
   });
 
@@ -56,15 +58,32 @@ describe("events", () => {
     const event = parseEvent({
       type: "error",
       version: "1.0",
-      code: "call_rejected",
+      code: "callRejected",
       message: "Call rejected",
-      request_id: "r1",
+      requestId: "r1",
       question: "why?",
     });
 
-    expect(event.code).toBe("call_rejected");
+    expect(event.code).toBe("callRejected");
     expect(event.requestId).toBe("r1");
     expect(event.question).toBe("why?");
+  });
+
+  it("parses no-answer terminal frames with failure reason", () => {
+    const event = parseEvent({
+      type: "call.noAnswer",
+      version: "1.0",
+      sessionId: "s1",
+      callId: "c1",
+      status: "noAnswer",
+      failureReason: "timeout",
+      timestamp: "t",
+    });
+
+    expect(event.type).toBe(EventType.CallNoAnswer);
+    expect(event.status).toBe("noAnswer");
+    expect(event.failureReason).toBe("timeout");
+    expect(isTerminal(event)).toBe(true);
   });
 
   it("detects terminal events including cancelled status", () => {
@@ -73,7 +92,8 @@ describe("events", () => {
         parseEvent({
           type: "call.completed",
           version: "1.0",
-          call_id: "c1",
+          sessionId: "s1",
+          callId: "c1",
           status: "completed",
           timestamp: "t",
         }),
@@ -82,11 +102,12 @@ describe("events", () => {
     expect(
       isTerminal(
         parseEvent({
-          type: "call.status_changed",
+          type: "call.statusChanged",
           version: "1.0",
-          call_id: "c1",
+          sessionId: "s1",
+          callId: "c1",
           status: "cancelled",
-          previous_status: "in_progress",
+          previousStatus: "inProgress",
           timestamp: "t",
         }),
       ),

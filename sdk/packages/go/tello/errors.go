@@ -24,17 +24,17 @@ func ErrorFor(code, message, question string) error {
 	switch code {
 	case "unauthenticated":
 		return &AuthenticationError{base}
-	case "to_required":
+	case "toRequired":
 		return &ValidationError{base}
-	case "agent_id_required":
+	case "agentIdRequired":
 		return &ValidationError{base}
-	case "call_already_active":
+	case "callAlreadyActive":
 		return &CallAlreadyActiveError{base}
-	case "no_active_call":
+	case "noActiveCall":
 		return &NoActiveCallError{base}
-	case "call_rejected":
+	case "callRejected":
 		return &CallRejectedError{base}
-	case "internal_error":
+	case "internalError":
 		fallthrough
 	default:
 		return &TelloServerError{base}
