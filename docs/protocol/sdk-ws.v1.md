@@ -96,6 +96,7 @@ HTTP upgrade 요청에서 API key를 다음 순서로 읽는다.
 
 | type | 추가 필드 | 의미 |
 | --- | --- | --- |
+| `call.created` | — | createCall 직후 첫 프레임. 공통 `callId`로 통화 id를 즉시 전달 |
 | `call.statusChanged` | `status`, `previousStatus` | 통화 상태 전이. cancelled도 이 이벤트(status `"cancelled"`)로 온다 |
 | `user.turn` | `turnIndex`, `text` | 상대방 발화. SDK가 응답할 차례 |
 | `agent.turn` | `turnIndex`, `text` | SDK 답변이 통화로 반영됨 |

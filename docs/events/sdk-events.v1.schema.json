@@ -4,6 +4,7 @@
   "title": "Tello SDK WebSocket Events",
   "description": "Inbound flat frames sent by turn-provider-gateway /sdk to SDK clients. Dispatch on `type`. All keys are camelCase.",
   "oneOf": [
+    { "$ref": "#/$defs/callCreated" },
     { "$ref": "#/$defs/callStatusChanged" },
     { "$ref": "#/$defs/userTurn" },
     { "$ref": "#/$defs/agentTurn" },
@@ -26,6 +27,10 @@
     "status": {
       "type": "string",
       "enum": ["queued", "dialing", "ringing", "inProgress", "transferring", "completed", "noAnswer", "failed", "cancelled"]
+    },
+    "callCreated": {
+      "allOf": [{ "$ref": "#/$defs/base" }],
+      "properties": { "type": { "const": "call.created" } }
     },
     "callStatusChanged": {
       "allOf": [{ "$ref": "#/$defs/base" }],
