@@ -37,6 +37,8 @@ func main() {
 }
 ```
 
+Send DTMF digits during a call with `client.SendDtmf(ctx, "1234#", "", "")` (mirrors `Answer`, `digits` in place of `text`).
+
 `NewClient("")` reads `TELLO_API_KEY`; `WithURL` overrides the default `ws://localhost:3000/sdk`.
 
 The module path assumes this package is mirrored to `github.com/tello-ai/tello-sdk-go` for release. If it remains inside a monorepo, set the module path to the fetchable repository path before publishing.

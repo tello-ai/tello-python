@@ -16,7 +16,7 @@ from tello.events import (
 def test_create_call_frame_uses_envelope_and_camelcase():
     frame = create_call_frame("+821012345678", "agent-1", "hi", {"src": "test"}, "r1")
     assert frame == {
-        "event": "create_call",
+        "event": "createCall",
         "data": {
             "to": "+821012345678",
             "agentId": "agent-1",
@@ -29,7 +29,7 @@ def test_create_call_frame_uses_envelope_and_camelcase():
 
 def test_create_call_frame_omits_optional_fields():
     assert create_call_frame("+821012345678", "agent-1") == {
-        "event": "create_call",
+        "event": "createCall",
         "data": {"to": "+821012345678", "agentId": "agent-1", "prompt": ""},
     }
 

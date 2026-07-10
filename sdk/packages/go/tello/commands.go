@@ -16,7 +16,7 @@ func CreateCallFrame(to, agentID, prompt string, metadata map[string]any, reques
 	if requestID != "" {
 		data["requestId"] = requestID
 	}
-	return CommandFrame{"event": "create_call", "data": data}
+	return CommandFrame{"event": "createCall", "data": data}
 }
 
 func AnswerFrame(text, messageID, requestID string) CommandFrame {
@@ -28,6 +28,17 @@ func AnswerFrame(text, messageID, requestID string) CommandFrame {
 		data["requestId"] = requestID
 	}
 	return CommandFrame{"event": "answer", "data": data}
+}
+
+func SendDtmfFrame(digits, messageID, requestID string) CommandFrame {
+	data := map[string]any{"digits": digits}
+	if messageID != "" {
+		data["messageId"] = messageID
+	}
+	if requestID != "" {
+		data["requestId"] = requestID
+	}
+	return CommandFrame{"event": "sendDtmf", "data": data}
 }
 
 func CancelFrame() CommandFrame {

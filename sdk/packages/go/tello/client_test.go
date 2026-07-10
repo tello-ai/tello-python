@@ -51,7 +51,7 @@ func TestClientSendsAuthorizationHeaderAndCreateCallFrame(t *testing.T) {
 		t.Fatalf("expected auth header, got %q", gotAuth)
 	}
 	assertJSONEqual(t, map[string]any{
-		"event": "create_call",
+		"event": "createCall",
 		"data": map[string]any{
 			"to":        "+821012345678",
 			"agentId":   "agent-1",

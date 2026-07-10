@@ -104,7 +104,7 @@ def make_gateway(
             event = msg.get("event")
             data = msg.get("data", {})
 
-            if event == "create_call":
+            if event == "createCall":
                 if not data.get("to"):
                     # rejected create: send error, keep socket open, no terminal
                     await ws.send(_error("toRequired", "to is required", data.get("requestId")))
@@ -135,6 +135,11 @@ def make_gateway(
                     await ws.send(_error("noActiveCall", "No active call", data.get("requestId")))
                     continue
                 await ws.send(_agent_turn(2, data.get("text", "")))
+            elif event == "sendDtmf":
+                if not active:
+                    await ws.send(_error("noActiveCall", "No active call", data.get("requestId")))
+                    continue
+                await ws.send(_agent_turn(2, data.get("digits", "")))
             elif event == "cancel":
                 await ws.send(_completed())
                 active = False
@@ -199,6 +204,25 @@ async def test_answer_produces_agent_turn():
             await client.wait_closed()
 
     assert turns == [(2, "The 2 PM slot is open.")]
+
+
+async def test_send_dtmf_produces_agent_turn():
+    turns = []
+    async with running(make_gateway(auto_complete=False)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+
+            @client.on(EventType.AGENT_TURN)
+            def _(event):
+                turns.append((event.turn_index, event.text))
+
+            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await asyncio.sleep(0.05)  # let user.turn arrive
+            await client.send_dtmf(digits="1234#")
+            await asyncio.sleep(0.05)
+            await client.cancel()
+            await client.wait_closed()
+
+    assert turns == [(2, "1234#")]
 
 
 async def test_error_frame_echoes_request_id():

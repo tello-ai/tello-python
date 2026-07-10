@@ -112,6 +112,10 @@ func (c *Client) Answer(ctx context.Context, text, messageID, requestID string) 
 	return c.send(ctx, AnswerFrame(text, messageID, requestID))
 }
 
+func (c *Client) SendDtmf(ctx context.Context, digits, messageID, requestID string) error {
+	return c.send(ctx, SendDtmfFrame(digits, messageID, requestID))
+}
+
 func (c *Client) Cancel(ctx context.Context) error {
 	return c.send(ctx, CancelFrame())
 }

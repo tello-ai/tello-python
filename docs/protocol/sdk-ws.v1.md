@@ -42,10 +42,10 @@ HTTP upgrade 요청에서 API key를 다음 순서로 읽는다.
 
 `data` 안의 필드다. 모든 명령은 선택적 `requestId`를 가질 수 있고, 실패 시 error 프레임의 `requestId`로 에코된다.
 
-### 4.1 `create_call`
+### 4.1 `createCall`
 
 ```json
-{ "event": "create_call", "data": {
+{ "event": "createCall", "data": {
   "to": "+821012345678",          // 필수. 전화할 대상 번호. 비면 error: toRequired
   "agentId": "agent-1",           // 필수. 비면 error: agentIdRequired
   "prompt": "예약 확인",           // 선택, 기본 ""
@@ -68,7 +68,19 @@ HTTP upgrade 요청에서 API key를 다음 순서로 읽는다.
 
 활성 통화가 없으면 error `noActiveCall`. 성공 시 `agent.turn` 이벤트가 온다.
 
-### 4.3 `cancel`
+### 4.3 `sendDtmf`
+
+```json
+{ "event": "sendDtmf", "data": {
+  "digits": "1234#",             // 필수. 보낼 DTMF 다이얼 문자열
+  "messageId": "m1",             // 선택, 기본 서버 생성 UUID
+  "requestId": "r1"              // 선택
+}}
+```
+
+활성 통화가 없으면 error `noActiveCall`. `answer`를 미러링하는 명령이며, `text` 대신 `digits`를 보낸다.
+
+### 4.4 `cancel`
 
 ```json
 { "event": "cancel", "data": {} }

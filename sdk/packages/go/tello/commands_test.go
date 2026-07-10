@@ -9,7 +9,7 @@ func TestCreateCallFrameUsesEnvelopeAndCamelCase(t *testing.T) {
 	frame := CreateCallFrame("+821012345678", "agent-1", "hi", map[string]any{"src": "test"}, "r1")
 
 	want := map[string]any{
-		"event": "create_call",
+		"event": "createCall",
 		"data": map[string]any{
 			"to":        "+821012345678",
 			"agentId":   "agent-1",
@@ -23,7 +23,7 @@ func TestCreateCallFrameUsesEnvelopeAndCamelCase(t *testing.T) {
 
 func TestCreateCallFrameOmitsOptionalFields(t *testing.T) {
 	assertJSONEqual(t, map[string]any{
-		"event": "create_call",
+		"event": "createCall",
 		"data":  map[string]any{"to": "+821012345678", "agentId": "agent-1", "prompt": ""},
 	}, CreateCallFrame("+821012345678", "agent-1", "", nil, ""))
 }
@@ -34,6 +34,13 @@ func TestAnswerAndCancelFrames(t *testing.T) {
 		"data":  map[string]any{"text": "yo", "messageId": "m1"},
 	}, AnswerFrame("yo", "m1", ""))
 	assertJSONEqual(t, map[string]any{"event": "cancel", "data": map[string]any{}}, CancelFrame())
+}
+
+func TestSendDtmfFrame(t *testing.T) {
+	assertJSONEqual(t, map[string]any{
+		"event": "sendDtmf",
+		"data":  map[string]any{"digits": "1234#", "messageId": "m1"},
+	}, SendDtmfFrame("1234#", "m1", ""))
 }
 
 func assertJSONEqual(t *testing.T, want, got any) {

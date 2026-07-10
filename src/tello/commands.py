@@ -24,7 +24,7 @@ def create_call_frame(
         data["metadata"] = metadata
     if request_id is not None:
         data["requestId"] = request_id
-    return {"event": "create_call", "data": data}
+    return {"event": "createCall", "data": data}
 
 
 def answer_frame(
@@ -38,6 +38,19 @@ def answer_frame(
     if request_id is not None:
         data["requestId"] = request_id
     return {"event": "answer", "data": data}
+
+
+def send_dtmf_frame(
+    digits: str,
+    message_id: str | None = None,
+    request_id: str | None = None,
+) -> dict[str, Any]:
+    data: dict[str, Any] = {"digits": digits}
+    if message_id is not None:
+        data["messageId"] = message_id
+    if request_id is not None:
+        data["requestId"] = request_id
+    return {"event": "sendDtmf", "data": data}
 
 
 def cancel_frame() -> dict[str, Any]:

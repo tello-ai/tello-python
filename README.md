@@ -80,7 +80,8 @@ use camelCase keys (`sessionId`, `callId`, `turnIndex`, `previousStatus`,
 | `DISCONNECTED` | `disconnected` | SDK-local; emitted when the WS closes |
 
 Commands: `await client.create_call(to, agent_id, prompt="", metadata=None)`,
-`await client.answer(text, message_id=None)`, `await client.cancel()`.
+`await client.answer(text, message_id=None)`,
+`await client.send_dtmf(digits, message_id=None)`, `await client.cancel()`.
 
 `await client.wait_closed()` resolves when the call reaches a terminal state
 (`call.completed` / `call.noAnswer` / `call.failed`, or a cancelled status) or

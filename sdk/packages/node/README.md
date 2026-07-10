@@ -18,4 +18,6 @@ await client.createCall("+821012345678", "agent-1", "reservation check");
 await client.waitClosed();
 ```
 
+Send DTMF digits during a call with `await client.sendDtmf("1234#")` (mirrors `answer`, `digits` in place of `text`).
+
 Outbound command frames use `{ event, data }`. Inbound gateway frames are flat and dispatched by `type`.

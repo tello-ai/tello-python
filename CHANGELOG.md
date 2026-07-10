@@ -3,7 +3,8 @@
 ## 0.1.0 (unreleased)
 
 - Initial WS realtime client for turn-provider-gateway `/sdk`.
-- `TelloClient`: connect (Bearer auth), `create_call` / `answer` / `cancel`, pub/sub event handlers, `wait_closed`.
+- `TelloClient`: connect (Bearer auth), `create_call` / `answer` / `send_dtmf` / `cancel`, pub/sub event handlers, `wait_closed`.
+- `send_dtmf(digits, message_id=None, request_id=None)`: mirrors `answer` but sends DTMF `digits` via the `sendDtmf` wire command.
 - Event parsing for `user.turn` / `agent.turn` / `call.statusChanged` / `call.completed` / `call.noAnswer` / `call.failed` / `error`.
 
 ### Changed (camelCase wire contract)

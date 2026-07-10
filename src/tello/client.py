@@ -38,6 +38,7 @@ from .commands import (
     encode,
     get_summary_frame,
     list_agents_frame,
+    send_dtmf_frame,
     send_sms_frame,
 )
 from .config import DEFAULT_URL, ENV_API_KEY, ENV_URL, ClientConfig
@@ -179,6 +180,15 @@ class TelloClient(EventEmitter):
     ) -> None:
         """Send the SDK's reply to the current user turn."""
         await self._send(answer_frame(text, message_id, request_id))
+
+    async def send_dtmf(
+        self,
+        digits: str,
+        message_id: str | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        """Send DTMF digits to the current call."""
+        await self._send(send_dtmf_frame(digits, message_id, request_id))
 
     async def cancel(self) -> None:
         """Cancel the active call (no-op server-side if none active)."""

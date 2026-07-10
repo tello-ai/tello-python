@@ -50,7 +50,7 @@ describe("TelloClient", () => {
     expect(await got).toEqual({
       auth: "Bearer key-1",
       frame: {
-        event: "create_call",
+        event: "createCall",
         data: {
           to: "+821012345678",
           agentId: "agent-1",
@@ -58,6 +58,31 @@ describe("TelloClient", () => {
           metadata: { src: "test" },
           requestId: "r1",
         },
+      },
+    });
+    await client.aclose();
+  });
+
+  it("sends sendDtmf frame", async () => {
+    const { url, server } = await listen();
+    const got = new Promise<unknown>((resolve) => {
+      server.on("connection", (socket) => {
+        socket.once("message", (raw) => {
+          resolve(JSON.parse(raw.toString()));
+          socket.close();
+        });
+      });
+    });
+
+    const client = await new TelloClient({ apiKey: "key-1", url }).connect();
+    await client.sendDtmf("1234#", "m1", "r1");
+
+    expect(await got).toEqual({
+      event: "sendDtmf",
+      data: {
+        digits: "1234#",
+        messageId: "m1",
+        requestId: "r1",
       },
     });
     await client.aclose();
