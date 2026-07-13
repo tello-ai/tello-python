@@ -3,9 +3,19 @@
 ## 0.1.0 (unreleased)
 
 - Initial WS realtime client for turn-provider-gateway `/sdk`.
-- `TelloClient`: connect (Bearer auth), `create_call` / `answer` / `send_dtmf` / `cancel`, pub/sub event handlers, `wait_closed`.
+- `TelloClient`: connect (internal `authenticate`/`auth.ok` handshake), `create_call` / `answer` / `send_dtmf` / `cancel`, pub/sub event handlers, `wait_closed`.
 - `send_dtmf(digits, message_id=None, request_id=None)`: mirrors `answer` but sends DTMF `digits` via the `sendDtmf` wire command.
 - Event parsing for `user.turn` / `agent.turn` / `call.statusChanged` / `call.completed` / `call.noAnswer` / `call.failed` / `error`.
+
+### Changed (auth handshake)
+
+- Connection auth moved from the `Authorization: Bearer` upgrade header to an
+  application-level handshake: the client sends `{"event":"authenticate",...}`
+  as the first frame and blocks until the server returns `auth.ok` before
+  `connect()` succeeds. Auth stays internal (no public step). The API key never
+  appears on the upgrade request, in the URL query, in logs, or in exceptions.
+  An `unauthenticated` error frame, a 4401 close, or an `auth.ok` wait timeout
+  each raise `AuthenticationError` from `connect()`.
 
 ### Changed (camelCase wire contract)
 

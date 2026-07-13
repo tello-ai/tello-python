@@ -226,7 +226,7 @@ sdk/contracts/protocol/sdk-ws.v1.md
 포함 대상:
 
 - 엔드포인트: `ws(s)://<host>:<port>/sdk`
-- 연결 인증: `Authorization: Bearer <api_key>` 헤더(우선) 또는 `?token=<api_key>` 쿼리. 실패 시 close code `4401`
+- 연결 인증: 소켓 오픈 후 첫 프레임으로 `{"event":"authenticate","data":{"apiKey":...}}`를 보내고 `auth.ok`를 기다린다(upgrade 헤더/쿼리 토큰 사용 안 함). 실패 시 `unauthenticated` error 프레임 또는 close code `4401`
 - 프레임 방향 비대칭:
   - 아웃바운드(client→server): `{"event":"<command>","data":{...}}`
   - 인바운드(server→client): flat `{"type":"<event>","version":"1.0", ...}`
@@ -289,7 +289,7 @@ sdk/contracts/errors/errors.v1.json
 
 ### 4.1 `client`
 
-연결 인증(Bearer API key), gateway URL, timeout, WS 연결 수명주기와 인바운드 프레임 디스패치 담당.
+연결 인증(내부 `authenticate`/`auth.ok` 핸드셰이크), gateway URL, timeout, WS 연결 수명주기와 인바운드 프레임 디스패치 담당.
 
 ```python
 from tello import TelloClient
@@ -789,8 +789,8 @@ tello.experimental.agent_session
 
 SDK 릴리스 전 최소 테스트:
 
-- 연결 인증 헤더(Bearer) 생성
-- 연결 실패(4401) → AuthenticationError 매핑
+- `authenticate` 프레임을 첫 프레임으로 전송하고 `auth.ok`까지 대기
+- 인증 실패(`unauthenticated` 프레임 / close 4401 / `auth.ok` 타임아웃) → AuthenticationError 매핑
 - 명령 프레임 봉투(`{event,data}`) 직렬화 검증
 - 인바운드 flat 이벤트 프레임 parse
 - 에러 프레임 code → 예외 매핑 (`requestId` 에코 포함)
@@ -849,7 +849,7 @@ asyncio.run(main())
 
 ```text
 v0.1.0
-  - WS 연결 + 인증(Bearer)
+  - WS 연결 + 인증(authenticate/auth.ok 핸드셰이크)
   - create_call() / answer() / cancel()
   - turn 이벤트 pub/sub (user.turn / agent.turn / call.statusChanged / call.*)
   - 에러 프레임 매핑, 하트비트 pong

@@ -15,8 +15,10 @@ ENV_URL = "TELLO_URL"
 class ClientConfig:
     """Connection settings for :class:`tello.client.TelloClient`.
 
-    ``api_key`` is sent as ``Authorization: Bearer <api_key>`` on the WS
-    upgrade request. ``url`` is the gateway ``/sdk`` endpoint.
+    ``api_key`` is sent in the first application frame after the socket opens
+    (the ``authenticate`` frame) — never on the WS upgrade request or in the
+    URL query. ``url`` is the gateway ``/sdk`` endpoint. ``open_timeout`` bounds
+    both the WS handshake and the wait for the server's ``auth.ok`` reply.
     """
 
     api_key: str

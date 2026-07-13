@@ -15,14 +15,28 @@ ws(s)://<host>:<port>/sdk
 - 기본 포트 3000. WebSocket 서브프로토콜 협상 없음.
 - 한 연결당 활성 통화는 하나다.
 
-## 2. 인증 (연결 시)
+## 2. 인증 (애플리케이션 핸드셰이크)
 
-HTTP upgrade 요청에서 API key를 다음 순서로 읽는다.
+인증은 HTTP upgrade 헤더나 쿼리 토큰이 아니라 **애플리케이션 프레임**으로 이뤄진다.
+API key는 upgrade 요청, URL 쿼리, 로그, 예외 메시지 어디에도 노출되지 않는다.
 
-1. `Authorization: Bearer <api_key>` 헤더 (권장)
-2. `?token=<api_key>` 쿼리 파라미터 (폴백; URL/로그 노출 주의)
+1. 소켓이 열린 뒤 클라이언트가 보내는 **첫 프레임**은 반드시 `authenticate`다.
 
-인증 실패 시 서버는 `error` 프레임(`code: "unauthenticated"`)을 보내고 close code `4401`로 연결을 종료한다.
+   ```json
+   { "event": "authenticate", "data": { "apiKey": "<TELLO_API_KEY>", "requestId": "<optional>" } }
+   ```
+
+2. 서버가 `auth.ok`를 보내기 전에는 다른 어떤 명령도 보내면 안 된다.
+
+   ```json
+   { "type": "auth.ok", "version": "1.0", "requestId": "<echoed when supplied>" }
+   ```
+
+3. `auth.ok` 이후에만 `createCall` / `listAgents` / `answer` / `sendDtmf` / `cancel`
+   / `getSummary` / `sendSms`를 보낼 수 있다.
+
+인증 실패 시 서버는 `error` 프레임(`code: "unauthenticated"`)을 보내고 close code `4401`로
+연결을 종료한다. `auth.ok`를 기다리는 타임아웃(서버 데드라인 5초) 역시 연결 실패로 취급한다.
 
 ## 3. 프레임 방향 비대칭 (중요)
 

@@ -1,7 +1,8 @@
 """Integration tests driving TelloClient against an in-memory fake gateway.
 
-The fake mimics turn-provider-gateway `/sdk`: Bearer auth on the upgrade
-request, inbound `{event, data}` command frames, and flat outbound event frames.
+The fake mimics turn-provider-gateway `/sdk`: an application-level auth
+handshake (first frame must be `authenticate`, server replies `auth.ok`),
+inbound `{event, data}` command frames, and flat outbound event frames.
 """
 
 import asyncio
@@ -10,9 +11,11 @@ from contextlib import asynccontextmanager
 
 import pytest
 import websockets
+from websockets.exceptions import ConnectionClosed
 
 from tello import (
     AuthenticationError,
+    ClientConfig,
     ConnectionClosedError,
     EventType,
     SessionReplacedError,
@@ -111,21 +114,60 @@ def _error(code, message, request_id=None):
     return json.dumps(frame)
 
 
+def _auth_ok(request_id=None):
+    frame = {"type": "auth.ok", "version": "1.0"}
+    if request_id is not None:
+        frame["requestId"] = request_id
+    return json.dumps(frame)
+
+
 def make_gateway(
     auto_complete=True,
     ping_on_create=False,
     drop_after_user_turn=False,
     scalar_frame=False,
     close_4429=False,
+    api_key=RAW_KEY,
+    auth_delay=0.0,
+    no_auth_ok=False,
+    auth_close_only=False,
+    received=None,
+    upgrade_sink=None,
 ):
     async def handler(ws):
-        if ws.request.headers.get("Authorization") != f"Bearer {RAW_KEY}":
-            await ws.send(_error("unauthenticated", "Authentication required"))
+        if upgrade_sink is not None:
+            upgrade_sink["authorization"] = ws.request.headers.get("Authorization")
+            upgrade_sink["path"] = ws.request.path
+
+        # The first application frame MUST be `authenticate`; no upgrade header
+        # or query token is used. Nothing else may be processed until auth.ok.
+        try:
+            raw = await ws.recv()
+        except ConnectionClosed:
+            return
+        msg = json.loads(raw)
+        if received is not None:
+            received.append(msg)
+        data = msg.get("data", {})
+
+        if auth_close_only:
             await ws.close(4401, "unauthenticated")
             return
+        if msg.get("event") != "authenticate" or data.get("apiKey") != api_key:
+            await ws.send(_error("unauthenticated", "Authentication required", data.get("requestId")))
+            await ws.close(4401, "unauthenticated")
+            return
+        if no_auth_ok:
+            await asyncio.sleep(2)  # never confirm: exercise client auth-wait timeout
+            return
+        if auth_delay:
+            await asyncio.sleep(auth_delay)
+        await ws.send(_auth_ok(data.get("requestId")))
 
         active = False
         async for raw in ws:
+            if received is not None:
+                received.append(json.loads(raw))
             msg = json.loads(raw)
             event = msg.get("event")
             data = msg.get("data", {})
@@ -277,12 +319,85 @@ async def test_error_frame_echoes_request_id():
     assert errors == [("noActiveCall", "req-1")]
 
 
-async def test_unauthenticated_raises_from_wait_closed():
+async def test_authenticate_is_first_frame_and_precedes_commands():
+    # The authenticate frame (carrying the API key) is the very first frame the
+    # server receives, and no business command reaches the server before it.
+    received = []
+    async with running(make_gateway(auto_complete=True, received=received)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.wait_closed()
+
+    events = [m.get("event") for m in received]
+    assert events[0] == "authenticate"
+    assert received[0]["data"]["apiKey"] == RAW_KEY
+    assert "createCall" in events
+    assert events.index("authenticate") < events.index("createCall")
+
+
+async def test_no_authorization_header_or_query_token_on_upgrade():
+    # The API key must not ride on the WS upgrade request nor in the URL query.
+    sink = {}
+    async with running(make_gateway(auto_complete=True, upgrade_sink=sink)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.wait_closed()
+
+    assert sink["authorization"] is None
+    assert RAW_KEY not in sink["path"]
+
+
+async def test_business_command_blocked_until_auth_ok():
+    # connect() must not return (so no command can be sent) until auth.ok. With a
+    # delayed auth.ok, the first server-received frame is still authenticate and
+    # createCall only follows after connect() unblocks.
+    received = []
+    async with running(make_gateway(auto_complete=True, auth_delay=0.2, received=received)) as url:
+        client = TelloClient(api_key=RAW_KEY, url=url)
+        await client.connect()  # blocks ~0.2s until auth.ok
+        await client.create_call(to="+821012345678", agent_id="agent-1")
+        await client.wait_closed()
+        await client.aclose()
+
+    events = [m.get("event") for m in received]
+    assert events[0] == "authenticate"
+    assert events.index("authenticate") < events.index("createCall")
+
+
+async def test_unauthenticated_error_frame_raises_from_connect():
+    # Server replies with an `unauthenticated` error frame (+4401 close).
     async with running(make_gateway()) as url:
         client = TelloClient(api_key="wrong-key", url=url)
-        await client.connect()
         with pytest.raises(AuthenticationError):
-            await client.wait_closed()
+            await client.connect()
+        await client.aclose()  # safe even though connect() failed
+
+
+async def test_4401_close_without_error_frame_raises_from_connect():
+    # Server closes with 4401 and no error frame during the auth handshake.
+    async with running(make_gateway(auth_close_only=True)) as url:
+        client = TelloClient(api_key=RAW_KEY, url=url)
+        with pytest.raises(AuthenticationError):
+            await client.connect()
+        await client.aclose()
+
+
+async def test_auth_ok_timeout_raises_from_connect():
+    # Server never sends auth.ok; the client's open_timeout bounds the wait.
+    async with running(make_gateway(no_auth_ok=True)) as url:
+        client = TelloClient(config=ClientConfig(api_key=RAW_KEY, url=url, open_timeout=0.3))
+        with pytest.raises(AuthenticationError):
+            await asyncio.wait_for(client.connect(), timeout=2)
+        await client.aclose()
+
+
+async def test_api_key_never_in_auth_exception_message():
+    secret = "tello_live_topsecret_value"
+    async with running(make_gateway()) as url:
+        client = TelloClient(api_key=secret, url=url)
+        with pytest.raises(AuthenticationError) as exc_info:
+            await client.connect()
+        assert secret not in str(exc_info.value)
         await client.aclose()
 
 

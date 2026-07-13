@@ -256,7 +256,7 @@ summary = telephony_get_summary(call_id=call_id)
 
 ```
 가입자 앱 (SDK)
-    │  WS connect  ws(s)://<host>/sdk  (Authorization: Bearer <api_key>)
+    │  WS connect  ws(s)://<host>/sdk  (첫 프레임 authenticate → auth.ok)
     ▼
 turn-provider-gateway  ◄──►  VGW
     │
@@ -286,7 +286,7 @@ import asyncio
 from tello import TelloClient, EventType
 
 async def main():
-    # gateway /sdk WebSocket에 연결 (연결 시 Bearer 인증)
+    # gateway /sdk WebSocket에 연결 (내부 authenticate/auth.ok 핸드셰이크)
     async with TelloClient(
         api_key="tello_live_xxxxxxxxxxxx",
         url="ws://localhost:3000/sdk",
@@ -315,7 +315,7 @@ asyncio.run(main())
 
 ```
 에이전트 설정 → 고급 → Agent 연계형 (SDK)
-└─ API Key: [발급/재발급]  (WS 연결 시 Authorization: Bearer 로 사용)
+└─ API Key: [발급/재발급]  (WS 연결 후 authenticate 프레임으로 사용)
 ```
 
 ### 5.3 Node.js SDK 사용법
@@ -381,7 +381,7 @@ SDK → gateway 응답은 `answer` 명령 프레임(봉투 있음):
 
 ### 5.5 연결 인증
 
-WS 연결 시 `Authorization: Bearer <api_key>` 헤더(또는 `?token=` 쿼리)로 인증한다. 별도의 콜백 HMAC 서명 검증은 필요 없다(가입자가 서버를 노출하지 않고 outbound 연결만 열기 때문). 인증 실패 시 gateway가 close code `4401`로 연결을 끊는다.
+소켓이 열린 뒤 클라이언트가 첫 프레임으로 `{"event":"authenticate","data":{"apiKey":...}}`를 보내고 서버의 `auth.ok`를 받아야 인증이 완료된다. API key는 upgrade 헤더나 URL 쿼리에 실리지 않는다. 별도의 콜백 HMAC 서명 검증은 필요 없다(가입자가 서버를 노출하지 않고 outbound 연결만 열기 때문). 인증 실패 시 gateway가 `unauthenticated` error 프레임 또는 close code `4401`로 연결을 끊는다.
 
 ### 5.6 SDK형의 특징
 
@@ -802,7 +802,7 @@ turn-provider-gateway → VGW
 │             ● SDK (WebSocket)                   │
 │                                                 │
 │ API Key     tello_live_••••••  [발급] [재발급]  │
-│             (WS 연결 시 Authorization: Bearer)  │
+│          (WS 연결 후 authenticate 프레임으로)   │
 └────────────────────────────────────────────────┘
 ```
 

@@ -6,11 +6,15 @@ inbound turn/status/terminal/error events to pub/sub handlers.
 
 Design notes
 ------------
-* Auth is on the WS upgrade request (``Authorization: Bearer <api_key>``). The
-  gateway completes the handshake even on a bad key, then sends an ``error``
-  frame and closes with code 4401 — so auth failure surfaces on the receive
-  loop and is raised from :meth:`wait_closed` / subsequent commands as
-  :class:`~tello.errors.AuthenticationError`.
+* Auth is an application-level handshake, not an upgrade header. After the
+  socket opens the client sends an ``authenticate`` frame carrying the API key
+  as its **first** frame, then blocks until the server replies ``auth.ok``
+  before :meth:`connect` returns. The API key never appears on the WS upgrade
+  request, in the URL query, in logs, or in any exception message. An
+  ``unauthenticated`` error frame, a close with code 4401, or a timeout waiting
+  for ``auth.ok`` all fail :meth:`connect` with
+  :class:`~tello.errors.AuthenticationError`. This handshake is internal: no
+  business command can run until :meth:`connect` has succeeded.
 * The gateway keeps the socket **open** on command errors (it never sends a
   terminal frame for a rejected ``create_call``). :meth:`wait_closed` therefore
   resolves on a call-start rejection too, raising the mapped exception, so a
@@ -33,6 +37,7 @@ from websockets.exceptions import ConnectionClosed
 
 from .commands import (
     answer_frame,
+    authenticate_frame,
     cancel_frame,
     create_call_frame,
     encode,
@@ -107,20 +112,76 @@ class TelloClient(EventEmitter):
     # -- lifecycle ---------------------------------------------------------
 
     async def connect(self) -> "TelloClient":
-        """Open the WS connection and start the receive loop."""
-        headers = {"Authorization": f"Bearer {self._config.api_key}"}
+        """Open the WS connection, authenticate, and start the receive loop.
+
+        Authentication is internal: this coroutine only returns once the server
+        has confirmed the API key with ``auth.ok``. Any auth failure/timeout
+        raises :class:`~tello.errors.AuthenticationError` (or another
+        :class:`~tello.errors.TelloError`) and the socket is closed.
+        """
         self._call_done.clear()
         self._closed.clear()
         self._close_exc = None
         self._call_error = None
         self._ws = await websockets.connect(
             self._config.url,
-            additional_headers=headers,
             open_timeout=self._config.open_timeout,
             close_timeout=self._config.close_timeout,
         )
+        try:
+            await self._authenticate()
+        except BaseException:
+            # Never leave a half-open socket behind on an auth failure.
+            try:
+                await self._ws.close()
+            finally:
+                self._ws = None
+            raise
         self._recv_task = asyncio.create_task(self._recv_loop())
         return self
+
+    async def _authenticate(self) -> None:
+        """Perform the application-level auth handshake before any command.
+
+        Sends the ``authenticate`` frame as the first frame, then blocks until
+        the server returns ``auth.ok``. An ``unauthenticated`` error frame, a
+        4401 close, or a wait timeout are all raised as connection failures.
+        The API key is never included in any raised message.
+        """
+        await self._ws.send(encode(authenticate_frame(self._config.api_key)))
+        try:
+            raw = await asyncio.wait_for(
+                self._ws.recv(), timeout=self._config.open_timeout
+            )
+        except asyncio.TimeoutError:
+            raise AuthenticationError(
+                "timed out waiting for authentication acknowledgement"
+            ) from None
+        except ConnectionClosed as exc:
+            raise self._auth_close_error(exc) from None
+
+        try:
+            frame = json.loads(raw)
+        except (ValueError, TypeError):
+            raise AuthenticationError("invalid authentication response") from None
+        if not isinstance(frame, dict):
+            raise AuthenticationError("invalid authentication response") from None
+
+        if frame.get("type") == "auth.ok":
+            return
+        if frame.get("type") == "error" and frame.get("code") == "unauthenticated":
+            raise AuthenticationError(frame.get("message") or "unauthenticated")
+        raise AuthenticationError("unexpected authentication response")
+
+    def _auth_close_error(self, exc: ConnectionClosed) -> TelloError:
+        """Map a socket close during the auth handshake to a typed error."""
+        received = getattr(exc, "rcvd", None)
+        code = received.code if received is not None else getattr(self._ws, "close_code", None)
+        if code == _CLOSE_UNAUTHENTICATED:
+            return AuthenticationError("unauthenticated")
+        if code == _CLOSE_SESSION_REPLACED:
+            return SessionReplacedError("session replaced")
+        return ConnectionClosedError("connection closed during authentication")
 
     async def aclose(self) -> None:
         """Close the connection and wait for the receive loop to finish."""

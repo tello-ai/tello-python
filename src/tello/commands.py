@@ -12,6 +12,22 @@ import json
 from typing import Any
 
 
+def authenticate_frame(
+    api_key: str,
+    request_id: str | None = None,
+) -> dict[str, Any]:
+    """Build the ``authenticate`` frame.
+
+    This is the first application frame sent after the socket opens; no other
+    command may be sent until the server confirms with ``auth.ok``. See
+    ``contracts/protocol/sdk-ws.v1.md`` §2.
+    """
+    data: dict[str, Any] = {"apiKey": api_key}
+    if request_id is not None:
+        data["requestId"] = request_id
+    return {"event": "authenticate", "data": data}
+
+
 def create_call_frame(
     to: str,
     agent_id: str,
