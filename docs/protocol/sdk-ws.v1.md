@@ -66,7 +66,9 @@ HTTP upgrade 요청에서 API key를 다음 순서로 읽는다.
 }}
 ```
 
-활성 통화가 없으면 error `noActiveCall`. 성공 시 `agent.turn` 이벤트가 온다.
+활성 통화가 없으면 error `noActiveCall`. 성공 시 동일한 `requestId`(제공한 경우)와
+유효 `messageId`를 담은 `answer.accepted`가 먼저 오며, 답변이 실제 통화에 반영되면
+후속 `agent.turn` 이벤트가 온다.
 
 ### 4.3 `sendDtmf`
 
@@ -99,6 +101,7 @@ HTTP upgrade 요청에서 API key를 다음 순서로 읽는다.
 | `call.created` | — | createCall 직후 첫 프레임. 공통 `callId`로 통화 id를 즉시 전달 |
 | `call.statusChanged` | `status`, `previousStatus` | 통화 상태 전이. cancelled도 이 이벤트(status `"cancelled"`)로 온다 |
 | `user.turn` | `turnIndex`, `text` | 상대방 발화. SDK가 응답할 차례 |
+| `answer.accepted` | `requestId?`, `messageId` | answer 명령이 검증되어 Voice Gateway로 제출됨. 실제 발화는 후속 `agent.turn`으로 확인 |
 | `agent.turn` | `turnIndex`, `text` | SDK 답변이 통화로 반영됨 |
 | `call.completed` | `status` | 종단: 정상 완료 |
 | `call.noAnswer` | `status`, `failureReason?` | 종단: 무응답 |
@@ -146,4 +149,5 @@ heartbeat 타임아웃으로 인한 종료는 close 프레임 없이 소켓이 �
 ## 9. 비목표
 
 - 재연결 / 세션 resume 프로토콜 없음.
-- 성공 응답 ACK 없음(상관관계는 error의 `requestId` 에코뿐).
+- `answer.accepted`는 명령 제출 ACK일 뿐 실제 발화 전달 보장은 아니다. 실제 통화
+  반영은 후속 `agent.turn`으로 확인한다.

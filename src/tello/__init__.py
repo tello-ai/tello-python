@@ -30,8 +30,10 @@ from .errors import (
     ValidationError,
 )
 from .events import (
+    AnswerAcceptedEvent,
     AgentInfo,
     AgentsListedEvent,
+    CallCreatedEvent,
     CallSummaryEvent,
     ErrorEvent,
     Event,
@@ -52,6 +54,8 @@ __all__ = [
     "DEFAULT_URL",
     "EventType",
     "Event",
+    "CallCreatedEvent",
+    "AnswerAcceptedEvent",
     "AgentInfo",
     "AgentsListedEvent",
     "CallSummaryEvent",

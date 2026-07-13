@@ -1,6 +1,11 @@
+import json
+from pathlib import Path
+
 from tello.commands import answer_frame, cancel_frame, create_call_frame, get_summary_frame, list_agents_frame, send_sms_frame
 from tello.events import (
+    AnswerAcceptedEvent,
     AgentsListedEvent,
+    CallCreatedEvent,
     CallSummaryEvent,
     ErrorEvent,
     EventType,
@@ -85,6 +90,38 @@ def test_parse_status_changed():
     )
     assert isinstance(event, StatusChangedEvent)
     assert (event.status, event.previous_status) == ("inProgress", "queued")
+
+
+def test_parse_call_created_and_answer_accepted():
+    created = parse_event(
+        {
+            "type": "call.created",
+            "version": "1.0",
+            "sessionId": "s1",
+            "callId": "c1",
+            "timestamp": "t",
+        }
+    )
+    assert isinstance(created, CallCreatedEvent)
+    assert (created.session_id, created.call_id) == ("s1", "c1")
+
+    accepted = parse_event(
+        {
+            "type": "answer.accepted",
+            "version": "1.0",
+            "requestId": "answer-1",
+            "sessionId": "s1",
+            "callId": "c1",
+            "messageId": "message-1",
+            "timestamp": "t",
+        }
+    )
+    assert isinstance(accepted, AnswerAcceptedEvent)
+    assert (accepted.request_id, accepted.message_id, accepted.call_id) == (
+        "answer-1",
+        "message-1",
+        "c1",
+    )
 
 
 def test_parse_error_frame_flat_with_request_id():
@@ -234,9 +271,24 @@ def test_unknown_event_type_falls_back_to_base_event():
 
 
 def test_event_type_constants():
+    assert EventType.CALL_CREATED == "call.created"
+    assert EventType.ANSWER_ACCEPTED == "answer.accepted"
     assert EventType.USER_TURN == "user.turn"
     assert EventType.AGENTS_LISTED == "agents.listed"
     assert EventType.CALL_SUMMARY == "call.summary"
     assert EventType.SMS_SENT == "sms.sent"
     assert EventType.CALL_STATUS_CHANGED == "call.statusChanged"
     assert EventType.CALL_NO_ANSWER == "call.noAnswer"
+
+
+def test_canonical_contract_declares_call_created_and_answer_accepted():
+    root = Path(__file__).parents[1]
+    schema = json.loads((root / "docs/events/sdk-events.v1.schema.json").read_text())
+    refs = {item["$ref"] for item in schema["oneOf"]}
+    assert "#/$defs/callCreated" in refs
+    assert "#/$defs/answerAccepted" in refs
+    assert schema["$defs"]["answerAccepted"]["required"] == ["messageId"]
+
+    protocol = (root / "docs/protocol/sdk-ws.v1.md").read_text()
+    assert "`call.created`" in protocol
+    assert "`answer.accepted`" in protocol

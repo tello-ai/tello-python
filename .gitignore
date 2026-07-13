@@ -12,4 +12,5 @@ venv/
 .ruff_cache/
 .coverage
 htmlcov/
+examples/.env
 .worktrees/

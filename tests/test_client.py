@@ -23,6 +23,18 @@ from tello import (
 RAW_KEY = "sdk-secret"
 
 
+def _call_created():
+    return json.dumps(
+        {
+            "type": "call.created",
+            "version": "1.0",
+            "sessionId": "session-1",
+            "callId": "call-1",
+            "timestamp": "2026-07-01T00:00:00.000Z",
+        }
+    )
+
+
 def _status_changed(status, previous):
     return json.dumps(
         {
@@ -61,6 +73,20 @@ def _agent_turn(index, text):
             "turnIndex": index,
             "text": text,
             "timestamp": "2026-07-01T00:00:01.500Z",
+        }
+    )
+
+
+def _answer_accepted(request_id, message_id):
+    return json.dumps(
+        {
+            "type": "answer.accepted",
+            "version": "1.0",
+            "requestId": request_id,
+            "sessionId": "session-1",
+            "callId": "call-1",
+            "messageId": message_id,
+            "timestamp": "2026-07-01T00:00:01.250Z",
         }
     )
 
@@ -117,6 +143,7 @@ def make_gateway(
                     await ws.close(4429, "session replaced")
                     return
                 active = True
+                await ws.send(_call_created())
                 await ws.send(_status_changed("inProgress", "queued"))
                 if scalar_frame:
                     await ws.send(json.dumps(123))  # valid JSON, non-object
@@ -134,6 +161,7 @@ def make_gateway(
                 if not active:
                     await ws.send(_error("noActiveCall", "No active call", data.get("requestId")))
                     continue
+                await ws.send(_answer_accepted(data.get("requestId"), data.get("messageId", "message-1")))
                 await ws.send(_agent_turn(2, data.get("text", "")))
             elif event == "sendDtmf":
                 if not active:
@@ -159,6 +187,7 @@ async def test_happy_path_streams_contract_order():
     async with running(make_gateway(auto_complete=True)) as url:
         async with TelloClient(api_key=RAW_KEY, url=url) as client:
             for et in (
+                EventType.CALL_CREATED,
                 EventType.CALL_STATUS_CHANGED,
                 EventType.USER_TURN,
                 EventType.CALL_COMPLETED,
@@ -167,7 +196,7 @@ async def test_happy_path_streams_contract_order():
             await client.create_call(to="+821012345678", agent_id="agent-1", prompt="call the clinic")
             await client.wait_closed()
 
-    assert seen == ["call.statusChanged", "user.turn", "call.completed"]
+    assert seen == ["call.created", "call.statusChanged", "user.turn", "call.completed"]
 
 
 async def test_user_turn_fields():
@@ -188,22 +217,29 @@ async def test_user_turn_fields():
 
 
 async def test_answer_produces_agent_turn():
-    turns = []
+    events = []
     async with running(make_gateway(auto_complete=False)) as url:
         async with TelloClient(api_key=RAW_KEY, url=url) as client:
 
+            @client.on(EventType.ANSWER_ACCEPTED)
+            def _(event):
+                events.append((event.type, event.request_id))
+
             @client.on(EventType.AGENT_TURN)
             def _(event):
-                turns.append((event.turn_index, event.text))
+                events.append((event.type, event.text))
 
             await client.create_call(to="+821012345678", agent_id="agent-1")
             await asyncio.sleep(0.05)  # let user.turn arrive
-            await client.answer(text="The 2 PM slot is open.")
+            await client.answer(text="The 2 PM slot is open.", request_id="answer-1")
             await asyncio.sleep(0.05)
             await client.cancel()
             await client.wait_closed()
 
-    assert turns == [(2, "The 2 PM slot is open.")]
+    assert events == [
+        ("answer.accepted", "answer-1"),
+        ("agent.turn", "The 2 PM slot is open."),
+    ]
 
 
 async def test_send_dtmf_produces_agent_turn():

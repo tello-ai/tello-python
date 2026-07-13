@@ -5,6 +5,7 @@
   "description": "Inbound flat frames sent by turn-provider-gateway /sdk to SDK clients. Dispatch on `type`. All keys are camelCase.",
   "oneOf": [
     { "$ref": "#/$defs/callCreated" },
+    { "$ref": "#/$defs/answerAccepted" },
     { "$ref": "#/$defs/callStatusChanged" },
     { "$ref": "#/$defs/userTurn" },
     { "$ref": "#/$defs/agentTurn" },
@@ -31,6 +32,15 @@
     "callCreated": {
       "allOf": [{ "$ref": "#/$defs/base" }],
       "properties": { "type": { "const": "call.created" } }
+    },
+    "answerAccepted": {
+      "allOf": [{ "$ref": "#/$defs/base" }],
+      "properties": {
+        "type": { "const": "answer.accepted" },
+        "requestId": { "type": "string" },
+        "messageId": { "type": "string" }
+      },
+      "required": ["messageId"]
     },
     "callStatusChanged": {
       "allOf": [{ "$ref": "#/$defs/base" }],

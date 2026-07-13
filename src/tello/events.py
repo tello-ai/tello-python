@@ -25,6 +25,8 @@ class EventType:
     AGENTS_LISTED = "agents.listed"
     CALL_SUMMARY = "call.summary"
     SMS_SENT = "sms.sent"
+    ANSWER_ACCEPTED = "answer.accepted"
+    CALL_CREATED = "call.created"
     CALL_STATUS_CHANGED = "call.statusChanged"
     CALL_COMPLETED = "call.completed"
     CALL_NO_ANSWER = "call.noAnswer"
@@ -48,6 +50,19 @@ class Event:
     call_id: str
     timestamp: str
     raw: dict[str, Any]
+
+
+@dataclass
+class CallCreatedEvent(Event):
+    """``call.created``, emitted before the first lifecycle event."""
+
+
+@dataclass
+class AnswerAcceptedEvent(Event):
+    """``answer.accepted``, acknowledging a submitted answer command."""
+
+    request_id: str | None
+    message_id: str
 
 
 @dataclass
@@ -142,7 +157,7 @@ class SmsSentEvent:
 
 def parse_event(
     frame: dict[str, Any],
-) -> Event | ErrorEvent | AgentsListedEvent | CallSummaryEvent | SmsSentEvent:
+) -> Event | ErrorEvent | AgentsListedEvent | CallSummaryEvent | SmsSentEvent | AnswerAcceptedEvent:
     """Parse a decoded inbound frame into a typed event.
 
     Unknown ``type`` values fall back to the base :class:`Event` so forward-
@@ -205,6 +220,16 @@ def parse_event(
         "timestamp": frame.get("timestamp", ""),
         "raw": frame,
     }
+
+    if frame_type == EventType.CALL_CREATED:
+        return CallCreatedEvent(**base)
+
+    if frame_type == EventType.ANSWER_ACCEPTED:
+        return AnswerAcceptedEvent(
+            **base,
+            request_id=frame.get("requestId"),
+            message_id=frame.get("messageId", ""),
+        )
 
     if frame_type in (EventType.USER_TURN, EventType.AGENT_TURN):
         return TurnEvent(**base, turn_index=frame.get("turnIndex", 0), text=frame.get("text", ""))
