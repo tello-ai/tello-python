@@ -19,11 +19,11 @@ pip install tello-sdk        # requires Python >= 3.10; imports as `tello`
 ## 2. API key
 
 The key authenticates the connection through an application-level handshake:
-right after the socket opens the SDK sends an `authenticate` frame carrying the
-key and waits for the server's `auth.ok` before anything else runs. The key is
-never placed on the WS upgrade request or in the URL query. This is fully
-internal — you never call authenticate yourself; `connect()` (and `async with`)
-simply does not succeed until authentication has. Issue a key in the portal
+right after the socket opens the SDK sends an `auth` frame carrying the key in
+its `token` field and waits for the server's `auth.ok` before anything else
+runs. The key is never placed on the WS upgrade request or in the URL query.
+This is fully internal — you never call auth yourself; `connect()` (and `async
+with`) simply does not succeed until authentication has. Issue a key in the portal
 (Agent settings → Advanced → Agent-linked / SDK).
 
 Pass it explicitly or via environment variables:
@@ -102,9 +102,17 @@ Gateway error frames map 1:1 to exceptions
 | `unauthenticated` | `AuthenticationError` (auth handshake; also close code 4401) |
 | `toRequired` | `ValidationError` |
 | `agentIdRequired` | `ValidationError` |
+| `callIdRequired` | `ValidationError` |
+| `callNotFound` | `ValidationError` |
+| `callNotCompleted` | `ValidationError` |
+| `smsToRequired` | `ValidationError` |
+| `smsMessageRequired` | `ValidationError` |
+| `dtmfDigitsRequired` | `ValidationError` |
+| `dtmfDigitsInvalid` | `ValidationError` |
 | `callAlreadyActive` | `CallAlreadyActiveError` |
 | `noActiveCall` | `NoActiveCallError` |
 | `callRejected` | `CallRejectedError` (with `.question`) |
+| `smsFailed` | `TelloServerError` |
 | `internalError` | `TelloServerError` |
 
 Command-level errors are also delivered to `EventType.ERROR` subscribers without

@@ -20,16 +20,16 @@ ws(s)://<host>:<port>/sdk
 인증은 HTTP upgrade 헤더나 쿼리 토큰이 아니라 **애플리케이션 프레임**으로 이뤄진다.
 API key는 upgrade 요청, URL 쿼리, 로그, 예외 메시지 어디에도 노출되지 않는다.
 
-1. 소켓이 열린 뒤 클라이언트가 보내는 **첫 프레임**은 반드시 `authenticate`다.
+1. 소켓이 열린 뒤 클라이언트가 보내는 **첫 프레임**은 반드시 `auth`다. raw API key는 `token` 필드로 보낸다.
 
    ```json
-   { "event": "authenticate", "data": { "apiKey": "<TELLO_API_KEY>", "requestId": "<optional>" } }
+   { "event": "auth", "data": { "token": "<TELLO_API_KEY>", "requestId": "<optional>" } }
    ```
 
 2. 서버가 `auth.ok`를 보내기 전에는 다른 어떤 명령도 보내면 안 된다.
 
    ```json
-   { "type": "auth.ok", "version": "1.0", "requestId": "<echoed when supplied>" }
+   { "type": "auth.ok", "version": "1.0", "accountId": "<accountId>", "requestId": "<echoed when supplied>" }
    ```
 
 3. `auth.ok` 이후에만 `createCall` / `listAgents` / `answer` / `sendDtmf` / `cancel`
@@ -116,6 +116,7 @@ API key는 upgrade 요청, URL 쿼리, 로그, 예외 메시지 어디에도 노
 | `call.statusChanged` | `status`, `previousStatus` | 통화 상태 전이. cancelled도 이 이벤트(status `"cancelled"`)로 온다 |
 | `user.turn` | `turnIndex`, `text` | 상대방 발화. SDK가 응답할 차례 |
 | `answer.accepted` | `requestId?`, `messageId` | answer 명령이 검증되어 Voice Gateway로 제출됨. 실제 발화는 후속 `agent.turn`으로 확인 |
+| `dtmf.accepted` | `requestId?`, `messageId`, `digits` | sendDtmf 명령이 검증되어 Voice Gateway로 제출됨 |
 | `agent.turn` | `turnIndex`, `text` | SDK 답변이 통화로 반영됨 |
 | `call.completed` | `status` | 종단: 정상 완료 |
 | `call.noAnswer` | `status`, `failureReason?` | 종단: 무응답 |
@@ -139,6 +140,12 @@ status 어휘: `queued`, `dialing`, `ringing`, `inProgress`, `transferring`, `co
 | `callAlreadyActive` | A call is already active | |
 | `toRequired` | to is required | |
 | `agentIdRequired` | agentId is required | |
+| `callIdRequired` | callId is required | `getSummary`에 `callId` 누락 |
+| `callNotFound` | Call not found | `getSummary` 대상 통화 없음 |
+| `callNotCompleted` | Call is not completed | `getSummary` 통화가 아직 미완료 |
+| `smsToRequired` | SMS recipient is required | `sendSms`에 `to` 누락 |
+| `smsMessageRequired` | SMS message is required | `sendSms`에 `message` 누락 |
+| `smsFailed` | SMS send failed | `sendSms` 전송 실패 |
 | `noActiveCall` | No active call | |
 | `dtmfDigitsRequired` | digits is required | `sendDtmf`에 `digits` 누락 |
 | `dtmfDigitsInvalid` | digits must contain only 0-9, *, # | `sendDtmf` `digits`에 허용 외 문자 |

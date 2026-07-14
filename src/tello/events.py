@@ -26,6 +26,7 @@ class EventType:
     CALL_SUMMARY = "call.summary"
     SMS_SENT = "sms.sent"
     ANSWER_ACCEPTED = "answer.accepted"
+    DTMF_ACCEPTED = "dtmf.accepted"
     CALL_CREATED = "call.created"
     CALL_STATUS_CHANGED = "call.statusChanged"
     CALL_COMPLETED = "call.completed"
@@ -63,6 +64,15 @@ class AnswerAcceptedEvent(Event):
 
     request_id: str | None
     message_id: str
+
+
+@dataclass
+class DtmfAcceptedEvent(Event):
+    """``dtmf.accepted``, acknowledging a submitted sendDtmf command."""
+
+    request_id: str | None
+    message_id: str
+    digits: str
 
 
 @dataclass
@@ -157,7 +167,15 @@ class SmsSentEvent:
 
 def parse_event(
     frame: dict[str, Any],
-) -> Event | ErrorEvent | AgentsListedEvent | CallSummaryEvent | SmsSentEvent | AnswerAcceptedEvent:
+) -> (
+    Event
+    | ErrorEvent
+    | AgentsListedEvent
+    | CallSummaryEvent
+    | SmsSentEvent
+    | AnswerAcceptedEvent
+    | DtmfAcceptedEvent
+):
     """Parse a decoded inbound frame into a typed event.
 
     Unknown ``type`` values fall back to the base :class:`Event` so forward-
@@ -229,6 +247,14 @@ def parse_event(
             **base,
             request_id=frame.get("requestId"),
             message_id=frame.get("messageId", ""),
+        )
+
+    if frame_type == EventType.DTMF_ACCEPTED:
+        return DtmfAcceptedEvent(
+            **base,
+            request_id=frame.get("requestId"),
+            message_id=frame.get("messageId", ""),
+            digits=frame.get("digits", ""),
         )
 
     if frame_type in (EventType.USER_TURN, EventType.AGENT_TURN):

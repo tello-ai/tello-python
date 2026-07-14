@@ -6,6 +6,7 @@
   "oneOf": [
     { "$ref": "#/$defs/callCreated" },
     { "$ref": "#/$defs/answerAccepted" },
+    { "$ref": "#/$defs/dtmfAccepted" },
     { "$ref": "#/$defs/callStatusChanged" },
     { "$ref": "#/$defs/userTurn" },
     { "$ref": "#/$defs/agentTurn" },
@@ -41,6 +42,16 @@
         "messageId": { "type": "string" }
       },
       "required": ["messageId"]
+    },
+    "dtmfAccepted": {
+      "allOf": [{ "$ref": "#/$defs/base" }],
+      "properties": {
+        "type": { "const": "dtmf.accepted" },
+        "requestId": { "type": "string" },
+        "messageId": { "type": "string" },
+        "digits": { "type": "string" }
+      },
+      "required": ["messageId", "digits"]
     },
     "callStatusChanged": {
       "allOf": [{ "$ref": "#/$defs/base" }],

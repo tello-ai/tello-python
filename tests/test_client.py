@@ -1,8 +1,9 @@
 """Integration tests driving TelloClient against an in-memory fake gateway.
 
 The fake mimics turn-provider-gateway `/sdk`: an application-level auth
-handshake (first frame must be `authenticate`, server replies `auth.ok`),
-inbound `{event, data}` command frames, and flat outbound event frames.
+handshake (first frame must be `auth` with the raw key in `token`, server
+replies `auth.ok`), inbound `{event, data}` command frames, and flat outbound
+event frames.
 """
 
 import asyncio
@@ -115,7 +116,7 @@ def _error(code, message, request_id=None):
 
 
 def _auth_ok(request_id=None):
-    frame = {"type": "auth.ok", "version": "1.0"}
+    frame = {"type": "auth.ok", "version": "1.0", "accountId": "account-1"}
     if request_id is not None:
         frame["requestId"] = request_id
     return json.dumps(frame)
@@ -139,8 +140,9 @@ def make_gateway(
             upgrade_sink["authorization"] = ws.request.headers.get("Authorization")
             upgrade_sink["path"] = ws.request.path
 
-        # The first application frame MUST be `authenticate`; no upgrade header
-        # or query token is used. Nothing else may be processed until auth.ok.
+        # The first application frame MUST be `auth` carrying the raw key in
+        # `token`; no upgrade header or query token is used. Nothing else may be
+        # processed until auth.ok.
         try:
             raw = await ws.recv()
         except ConnectionClosed:
@@ -153,7 +155,7 @@ def make_gateway(
         if auth_close_only:
             await ws.close(4401, "unauthenticated")
             return
-        if msg.get("event") != "authenticate" or data.get("apiKey") != api_key:
+        if msg.get("event") != "auth" or data.get("token") != api_key:
             await ws.send(_error("unauthenticated", "Authentication required", data.get("requestId")))
             await ws.close(4401, "unauthenticated")
             return
@@ -319,9 +321,9 @@ async def test_error_frame_echoes_request_id():
     assert errors == [("noActiveCall", "req-1")]
 
 
-async def test_authenticate_is_first_frame_and_precedes_commands():
-    # The authenticate frame (carrying the API key) is the very first frame the
-    # server receives, and no business command reaches the server before it.
+async def test_auth_is_first_frame_and_precedes_commands():
+    # The auth frame (carrying the API key in `token`) is the very first frame
+    # the server receives, and no business command reaches the server before it.
     received = []
     async with running(make_gateway(auto_complete=True, received=received)) as url:
         async with TelloClient(api_key=RAW_KEY, url=url) as client:
@@ -329,10 +331,10 @@ async def test_authenticate_is_first_frame_and_precedes_commands():
             await client.wait_closed()
 
     events = [m.get("event") for m in received]
-    assert events[0] == "authenticate"
-    assert received[0]["data"]["apiKey"] == RAW_KEY
+    assert events[0] == "auth"
+    assert received[0]["data"]["token"] == RAW_KEY
     assert "createCall" in events
-    assert events.index("authenticate") < events.index("createCall")
+    assert events.index("auth") < events.index("createCall")
 
 
 async def test_no_authorization_header_or_query_token_on_upgrade():
@@ -349,7 +351,7 @@ async def test_no_authorization_header_or_query_token_on_upgrade():
 
 async def test_business_command_blocked_until_auth_ok():
     # connect() must not return (so no command can be sent) until auth.ok. With a
-    # delayed auth.ok, the first server-received frame is still authenticate and
+    # delayed auth.ok, the first server-received frame is still auth and
     # createCall only follows after connect() unblocks.
     received = []
     async with running(make_gateway(auto_complete=True, auth_delay=0.2, received=received)) as url:
@@ -360,8 +362,8 @@ async def test_business_command_blocked_until_auth_ok():
         await client.aclose()
 
     events = [m.get("event") for m in received]
-    assert events[0] == "authenticate"
-    assert events.index("authenticate") < events.index("createCall")
+    assert events[0] == "auth"
+    assert events.index("auth") < events.index("createCall")
 
 
 async def test_unauthenticated_error_frame_raises_from_connect():

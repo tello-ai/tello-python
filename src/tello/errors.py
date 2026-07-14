@@ -51,10 +51,18 @@ class TelloServerError(TelloError):
 
 _CODE_TO_EXCEPTION: dict[str, type[TelloError]] = {
     "unauthenticated": AuthenticationError,
+    "callAlreadyActive": CallAlreadyActiveError,
     "toRequired": ValidationError,
     "agentIdRequired": ValidationError,
-    "callAlreadyActive": CallAlreadyActiveError,
+    "callIdRequired": ValidationError,
+    "callNotFound": ValidationError,
+    "callNotCompleted": ValidationError,
+    "smsToRequired": ValidationError,
+    "smsMessageRequired": ValidationError,
+    "smsFailed": TelloServerError,
     "noActiveCall": NoActiveCallError,
+    "dtmfDigitsRequired": ValidationError,
+    "dtmfDigitsInvalid": ValidationError,
     "callRejected": CallRejectedError,
     "internalError": TelloServerError,
 }

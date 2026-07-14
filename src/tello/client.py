@@ -7,8 +7,8 @@ inbound turn/status/terminal/error events to pub/sub handlers.
 Design notes
 ------------
 * Auth is an application-level handshake, not an upgrade header. After the
-  socket opens the client sends an ``authenticate`` frame carrying the API key
-  as its **first** frame, then blocks until the server replies ``auth.ok``
+  socket opens the client sends an ``auth`` frame carrying the API key in its
+  ``token`` field as its **first** frame, then blocks until the server replies ``auth.ok``
   before :meth:`connect` returns. The API key never appears on the WS upgrade
   request, in the URL query, in logs, or in any exception message. An
   ``unauthenticated`` error frame, a close with code 4401, or a timeout waiting
@@ -37,7 +37,7 @@ from websockets.exceptions import ConnectionClosed
 
 from .commands import (
     answer_frame,
-    authenticate_frame,
+    auth_frame,
     cancel_frame,
     create_call_frame,
     encode,
@@ -143,12 +143,13 @@ class TelloClient(EventEmitter):
     async def _authenticate(self) -> None:
         """Perform the application-level auth handshake before any command.
 
-        Sends the ``authenticate`` frame as the first frame, then blocks until
-        the server returns ``auth.ok``. An ``unauthenticated`` error frame, a
-        4401 close, or a wait timeout are all raised as connection failures.
-        The API key is never included in any raised message.
+        Sends the ``auth`` frame (API key in its ``token`` field) as the first
+        frame, then blocks until the server returns ``auth.ok``. An
+        ``unauthenticated`` error frame, a 4401 close, or a wait timeout are all
+        raised as connection failures. The API key is never included in any
+        raised message.
         """
-        await self._ws.send(encode(authenticate_frame(self._config.api_key)))
+        await self._ws.send(encode(auth_frame(self._config.api_key)))
         try:
             raw = await asyncio.wait_for(
                 self._ws.recv(), timeout=self._config.open_timeout
@@ -267,11 +268,10 @@ class TelloClient(EventEmitter):
         self,
         to: str,
         message: str,
-        call_id: str | None = None,
         request_id: str | None = None,
     ) -> None:
         """Send an SMS through the authenticated account."""
-        await self._send(send_sms_frame(to, message, call_id, request_id))
+        await self._send(send_sms_frame(to, message, request_id))
 
     async def _send(self, frame: dict[str, Any]) -> None:
         if self._ws is None:

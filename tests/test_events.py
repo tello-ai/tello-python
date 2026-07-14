@@ -7,6 +7,7 @@ from tello.events import (
     AgentsListedEvent,
     CallCreatedEvent,
     CallSummaryEvent,
+    DtmfAcceptedEvent,
     ErrorEvent,
     EventType,
     SmsSentEvent,
@@ -54,9 +55,13 @@ def test_summary_and_sms_frames():
         "event": "getSummary",
         "data": {"callId": "call-1", "requestId": "summary-1"},
     }
-    assert send_sms_frame("01012345678", "예약 확인", "call-1", "sms-1") == {
+    assert send_sms_frame("01012345678", "예약 확인", "sms-1") == {
         "event": "sendSms",
-        "data": {"to": "01012345678", "message": "예약 확인", "callId": "call-1", "requestId": "sms-1"},
+        "data": {"to": "01012345678", "message": "예약 확인", "requestId": "sms-1"},
+    }
+    assert send_sms_frame("01012345678", "예약 확인") == {
+        "event": "sendSms",
+        "data": {"to": "01012345678", "message": "예약 확인"},
     }
 
 
@@ -120,6 +125,28 @@ def test_parse_call_created_and_answer_accepted():
     assert (accepted.request_id, accepted.message_id, accepted.call_id) == (
         "answer-1",
         "message-1",
+        "c1",
+    )
+
+
+def test_parse_dtmf_accepted():
+    event = parse_event(
+        {
+            "type": "dtmf.accepted",
+            "version": "1.0",
+            "requestId": "dtmf-1",
+            "sessionId": "s1",
+            "callId": "c1",
+            "messageId": "message-1",
+            "digits": "1234#",
+            "timestamp": "t",
+        }
+    )
+    assert isinstance(event, DtmfAcceptedEvent)
+    assert (event.request_id, event.message_id, event.digits, event.call_id) == (
+        "dtmf-1",
+        "message-1",
+        "1234#",
         "c1",
     )
 
@@ -273,6 +300,7 @@ def test_unknown_event_type_falls_back_to_base_event():
 def test_event_type_constants():
     assert EventType.CALL_CREATED == "call.created"
     assert EventType.ANSWER_ACCEPTED == "answer.accepted"
+    assert EventType.DTMF_ACCEPTED == "dtmf.accepted"
     assert EventType.USER_TURN == "user.turn"
     assert EventType.AGENTS_LISTED == "agents.listed"
     assert EventType.CALL_SUMMARY == "call.summary"

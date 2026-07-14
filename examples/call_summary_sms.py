@@ -236,7 +236,6 @@ async def main() -> None:
         await client.send_sms(
             to=str(config["sms_to"]),
             message=str(config["sms_message"]),
-            call_id=call_id,
             request_id=sms_request_id,
         )
         await wait_for_stage(sms_sent, failed, "sms.sent", timeout_seconds)

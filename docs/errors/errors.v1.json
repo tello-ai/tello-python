@@ -16,7 +16,15 @@
     { "code": "callAlreadyActive", "message": "A call is already active", "sdkException": "CallAlreadyActiveError" },
     { "code": "toRequired", "message": "to is required", "sdkException": "ValidationError" },
     { "code": "agentIdRequired", "message": "agentId is required", "sdkException": "ValidationError" },
+    { "code": "callIdRequired", "message": "callId is required", "sdkException": "ValidationError" },
+    { "code": "callNotFound", "message": "Call not found", "sdkException": "ValidationError" },
+    { "code": "callNotCompleted", "message": "Call is not completed", "sdkException": "ValidationError" },
+    { "code": "smsToRequired", "message": "SMS recipient is required", "sdkException": "ValidationError" },
+    { "code": "smsMessageRequired", "message": "SMS message is required", "sdkException": "ValidationError" },
+    { "code": "smsFailed", "message": "SMS send failed", "sdkException": "TelloServerError" },
     { "code": "noActiveCall", "message": "No active call", "sdkException": "NoActiveCallError" },
+    { "code": "dtmfDigitsRequired", "message": "digits is required", "sdkException": "ValidationError" },
+    { "code": "dtmfDigitsInvalid", "message": "digits must contain only 0-9, *, #", "sdkException": "ValidationError" },
     { "code": "callRejected", "message": "Call rejected", "sdkException": "CallRejectedError", "extra": ["question"] },
     { "code": "internalError", "message": "Internal error", "sdkException": "TelloServerError" }
   ]

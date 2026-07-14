@@ -226,7 +226,7 @@ sdk/contracts/protocol/sdk-ws.v1.md
 포함 대상:
 
 - 엔드포인트: `ws(s)://<host>:<port>/sdk`
-- 연결 인증: 소켓 오픈 후 첫 프레임으로 `{"event":"authenticate","data":{"apiKey":...}}`를 보내고 `auth.ok`를 기다린다(upgrade 헤더/쿼리 토큰 사용 안 함). 실패 시 `unauthenticated` error 프레임 또는 close code `4401`
+- 연결 인증: 소켓 오픈 후 첫 프레임으로 `{"event":"auth","data":{"token":...}}`를 보내고 `auth.ok`를 기다린다(upgrade 헤더/쿼리 토큰 사용 안 함). 실패 시 `unauthenticated` error 프레임 또는 close code `4401`
 - 프레임 방향 비대칭:
   - 아웃바운드(client→server): `{"event":"<command>","data":{...}}`
   - 인바운드(server→client): flat `{"type":"<event>","version":"1.0", ...}`
@@ -281,7 +281,7 @@ sdk/contracts/errors/errors.v1.json
 }
 ```
 
-`code` 목록: `unauthenticated`, `callAlreadyActive`, `toRequired`, `agentIdRequired`, `noActiveCall`, `callRejected`, `internalError`. `requestId`는 클라이언트가 명령에 `requestId`를 넣었을 때만 에코된다. `callRejected`는 `question` 필드를 동반할 수 있다.
+`code` 목록: `unauthenticated`, `callAlreadyActive`, `toRequired`, `agentIdRequired`, `callIdRequired`, `callNotFound`, `callNotCompleted`, `smsToRequired`, `smsMessageRequired`, `smsFailed`, `noActiveCall`, `dtmfDigitsRequired`, `dtmfDigitsInvalid`, `callRejected`, `internalError`. `requestId`는 클라이언트가 명령에 `requestId`를 넣었을 때만 에코된다. `callRejected`는 `question` 필드를 동반할 수 있다.
 
 ---
 
@@ -289,7 +289,7 @@ sdk/contracts/errors/errors.v1.json
 
 ### 4.1 `client`
 
-연결 인증(내부 `authenticate`/`auth.ok` 핸드셰이크), gateway URL, timeout, WS 연결 수명주기와 인바운드 프레임 디스패치 담당.
+연결 인증(내부 `auth`/`auth.ok` 핸드셰이크), gateway URL, timeout, WS 연결 수명주기와 인바운드 프레임 디스패치 담당.
 
 ```python
 from tello import TelloClient
@@ -329,9 +329,17 @@ gateway 에러 코드를 SDK 예외 타입으로 1:1 매핑한다.
 | `unauthenticated` | `AuthenticationError` |
 | `toRequired` | `ValidationError` |
 | `agentIdRequired` | `ValidationError` |
+| `callIdRequired` | `ValidationError` |
+| `callNotFound` | `ValidationError` |
+| `callNotCompleted` | `ValidationError` |
+| `smsToRequired` | `ValidationError` |
+| `smsMessageRequired` | `ValidationError` |
+| `dtmfDigitsRequired` | `ValidationError` |
+| `dtmfDigitsInvalid` | `ValidationError` |
 | `callAlreadyActive` | `CallAlreadyActiveError` |
 | `noActiveCall` | `NoActiveCallError` |
 | `callRejected` | `CallRejectedError` (`question` 포함) |
+| `smsFailed` | `TelloServerError` |
 | `internalError` | `TelloServerError` |
 
 연결 인증 실패 close(`4401`)도 `AuthenticationError`로 매핑한다.
@@ -789,7 +797,7 @@ tello.experimental.agent_session
 
 SDK 릴리스 전 최소 테스트:
 
-- `authenticate` 프레임을 첫 프레임으로 전송하고 `auth.ok`까지 대기
+- `auth` 프레임(`token` 필드)을 첫 프레임으로 전송하고 `auth.ok`까지 대기
 - 인증 실패(`unauthenticated` 프레임 / close 4401 / `auth.ok` 타임아웃) → AuthenticationError 매핑
 - 명령 프레임 봉투(`{event,data}`) 직렬화 검증
 - 인바운드 flat 이벤트 프레임 parse
@@ -849,7 +857,7 @@ asyncio.run(main())
 
 ```text
 v0.1.0
-  - WS 연결 + 인증(authenticate/auth.ok 핸드셰이크)
+  - WS 연결 + 인증(auth/auth.ok 핸드셰이크)
   - create_call() / answer() / cancel()
   - turn 이벤트 pub/sub (user.turn / agent.turn / call.statusChanged / call.*)
   - 에러 프레임 매핑, 하트비트 pong

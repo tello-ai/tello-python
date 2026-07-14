@@ -12,20 +12,21 @@ import json
 from typing import Any
 
 
-def authenticate_frame(
+def auth_frame(
     api_key: str,
     request_id: str | None = None,
 ) -> dict[str, Any]:
-    """Build the ``authenticate`` frame.
+    """Build the ``auth`` frame.
 
     This is the first application frame sent after the socket opens; no other
-    command may be sent until the server confirms with ``auth.ok``. See
+    command may be sent until the server confirms with ``auth.ok``. The raw API
+    key travels in the ``token`` field. See
     ``contracts/protocol/sdk-ws.v1.md`` §2.
     """
-    data: dict[str, Any] = {"apiKey": api_key}
+    data: dict[str, Any] = {"token": api_key}
     if request_id is not None:
         data["requestId"] = request_id
-    return {"event": "authenticate", "data": data}
+    return {"event": "auth", "data": data}
 
 
 def create_call_frame(
@@ -90,12 +91,9 @@ def get_summary_frame(call_id: str, request_id: str | None = None) -> dict[str, 
 def send_sms_frame(
     to: str,
     message: str,
-    call_id: str | None = None,
     request_id: str | None = None,
 ) -> dict[str, Any]:
     data: dict[str, Any] = {"to": to, "message": message}
-    if call_id is not None:
-        data["callId"] = call_id
     if request_id is not None:
         data["requestId"] = request_id
     return {"event": "sendSms", "data": data}

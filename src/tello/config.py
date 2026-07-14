@@ -16,8 +16,8 @@ class ClientConfig:
     """Connection settings for :class:`tello.client.TelloClient`.
 
     ``api_key`` is sent in the first application frame after the socket opens
-    (the ``authenticate`` frame) — never on the WS upgrade request or in the
-    URL query. ``url`` is the gateway ``/sdk`` endpoint. ``open_timeout`` bounds
+    (the ``auth`` frame's ``token`` field) — never on the WS upgrade request or
+    in the URL query. ``url`` is the gateway ``/sdk`` endpoint. ``open_timeout`` bounds
     both the WS handshake and the wait for the server's ``auth.ok`` reply.
     """
 

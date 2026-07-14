@@ -3,26 +3,33 @@
 ## 0.1.0 (unreleased)
 
 - Initial WS realtime client for turn-provider-gateway `/sdk`.
-- `TelloClient`: connect (internal `authenticate`/`auth.ok` handshake), `create_call` / `answer` / `send_dtmf` / `cancel`, pub/sub event handlers, `wait_closed`.
+- `TelloClient`: connect (internal `auth`/`auth.ok` handshake), `create_call` / `answer` / `send_dtmf` / `cancel`, pub/sub event handlers, `wait_closed`.
 - `send_dtmf(digits, message_id=None, request_id=None)`: mirrors `answer` but sends DTMF `digits` via the `sendDtmf` wire command.
 - Event parsing for `user.turn` / `agent.turn` / `call.statusChanged` / `call.completed` / `call.noAnswer` / `call.failed` / `error`.
 
 ### Changed (auth handshake)
 
 - Connection auth moved from the `Authorization: Bearer` upgrade header to an
-  application-level handshake: the client sends `{"event":"authenticate",...}`
-  as the first frame and blocks until the server returns `auth.ok` before
-  `connect()` succeeds. Auth stays internal (no public step). The API key never
-  appears on the upgrade request, in the URL query, in logs, or in exceptions.
-  An `unauthenticated` error frame, a 4401 close, or an `auth.ok` wait timeout
-  each raise `AuthenticationError` from `connect()`.
+  application-level handshake: the client sends
+  `{"event":"auth","data":{"token":"<apiKey>"}}` as the first frame and blocks
+  until the server returns `auth.ok` before `connect()` succeeds. Auth stays
+  internal (no public step). The API key never appears on the upgrade request,
+  in the URL query, in logs, or in exceptions. An `unauthenticated` error frame,
+  a 4401 close, or an `auth.ok` wait timeout each raise `AuthenticationError`
+  from `connect()`.
 
 ### Changed (camelCase wire contract)
 
 - Inbound frames are camelCase-only: event types `call.statusChanged` / `call.noAnswer`,
   keys `sessionId` / `callId` / `turnIndex` / `previousStatus` / `failureReason` / `requestId`,
   status vocabulary `inProgress` / `noAnswer` (etc.), error codes `toRequired` /
-  `agentIdRequired` / `callAlreadyActive` / `noActiveCall` / `callRejected` / `internalError`.
+  `agentIdRequired` / `callIdRequired` / `callNotFound` / `callNotCompleted` /
+  `smsToRequired` / `smsMessageRequired` / `smsFailed` / `callAlreadyActive` /
+  `noActiveCall` / `dtmfDigitsRequired` / `dtmfDigitsInvalid` / `callRejected` /
+  `internalError`.
+- Added `dtmf.accepted` event parsing (`DtmfAcceptedEvent`), acking a `sendDtmf` command.
+- `send_sms(to, message, request_id=None)` no longer accepts/sends `call_id`
+  (the `sendSms` wire command carries only `to` / `message` / `requestId`).
 - Python attribute names stay snake_case (`event.call_id`, `event.turn_index`, ...);
   `Event` gains a `session_id` attribute (parsed from `sessionId`).
 - Outbound commands were already camelCase and are unchanged.
