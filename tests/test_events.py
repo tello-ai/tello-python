@@ -1,10 +1,9 @@
 import json
 from pathlib import Path
 
-from tello.commands import answer_frame, cancel_frame, create_call_frame, get_summary_frame, list_agents_frame, send_sms_frame
+from tello.commands import answer_frame, cancel_frame, create_call_frame, get_summary_frame, send_sms_frame
 from tello.events import (
     AnswerAcceptedEvent,
-    AgentsListedEvent,
     CallCreatedEvent,
     CallSummaryEvent,
     DtmfAcceptedEvent,
@@ -20,12 +19,11 @@ from tello.events import (
 
 
 def test_create_call_frame_uses_envelope_and_camelcase():
-    frame = create_call_frame("+821012345678", "agent-1", "hi", {"src": "test"}, "r1")
+    frame = create_call_frame("+821012345678", "hi", {"src": "test"}, "r1")
     assert frame == {
         "event": "createCall",
         "data": {
             "to": "+821012345678",
-            "agentId": "agent-1",
             "prompt": "hi",
             "metadata": {"src": "test"},
             "requestId": "r1",
@@ -34,20 +32,23 @@ def test_create_call_frame_uses_envelope_and_camelcase():
 
 
 def test_create_call_frame_omits_optional_fields():
-    assert create_call_frame("+821012345678", "agent-1") == {
+    assert create_call_frame("+821012345678") == {
         "event": "createCall",
-        "data": {"to": "+821012345678", "agentId": "agent-1", "prompt": ""},
+        "data": {"to": "+821012345678", "prompt": ""},
     }
+
+
+def test_create_call_frame_never_includes_agent_id():
+    # Contract: the SDK createCall frame must not carry an agentId key, ever.
+    full = create_call_frame("+821012345678", "hi", {"src": "test"}, "r1")
+    minimal = create_call_frame("+821012345678")
+    assert "agentId" not in full["data"]
+    assert "agentId" not in minimal["data"]
 
 
 def test_answer_and_cancel_frames():
     assert answer_frame("yo", "m1") == {"event": "answer", "data": {"text": "yo", "messageId": "m1"}}
     assert cancel_frame() == {"event": "cancel", "data": {}}
-
-
-def test_list_agents_frame_uses_request_id_when_provided():
-    assert list_agents_frame("agents-1") == {"event": "listAgents", "data": {"requestId": "agents-1"}}
-    assert list_agents_frame() == {"event": "listAgents", "data": {}}
 
 
 def test_summary_and_sms_frames():
@@ -167,32 +168,6 @@ def test_parse_call_rejected_carries_question():
     assert event.question == "why?"
 
 
-def test_parse_agents_listed():
-    event = parse_event(
-        {
-            "type": "agents.listed",
-            "version": "1.0",
-            "requestId": "agents-1",
-            "agents": [
-                {
-                    "agentId": "agent-1",
-                    "name": "예약 확인",
-                    "role": "AI 상담원",
-                    "isDefault": True,
-                    "status": "published",
-                }
-            ],
-        }
-    )
-    assert isinstance(event, AgentsListedEvent)
-    assert event.request_id == "agents-1"
-    assert event.agents[0].agent_id == "agent-1"
-    assert event.agents[0].name == "예약 확인"
-    assert event.agents[0].role == "AI 상담원"
-    assert event.agents[0].is_default is True
-    assert event.agents[0].status == "published"
-
-
 def test_parse_call_summary_and_sms_sent():
     summary = parse_event(
         {
@@ -302,7 +277,6 @@ def test_event_type_constants():
     assert EventType.ANSWER_ACCEPTED == "answer.accepted"
     assert EventType.DTMF_ACCEPTED == "dtmf.accepted"
     assert EventType.USER_TURN == "user.turn"
-    assert EventType.AGENTS_LISTED == "agents.listed"
     assert EventType.CALL_SUMMARY == "call.summary"
     assert EventType.SMS_SENT == "sms.sent"
     assert EventType.CALL_STATUS_CHANGED == "call.statusChanged"

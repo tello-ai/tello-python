@@ -47,7 +47,7 @@ async def main():
         async def on_user_turn(event):
             await client.answer(text="확인했습니다. 계속 말씀해주세요.")
 
-        await client.create_call(to="+821012345678", agent_id="agent-1", prompt="예약 확인")
+        await client.create_call(to="+821012345678", prompt="예약 확인")
         await client.wait_closed()
 
 asyncio.run(main())
@@ -60,7 +60,7 @@ form is sugar for `connect()` / `aclose()`; use them explicitly if you prefer:
 client = TelloClient(api_key="tello_live_xxx", url="ws://localhost:3000/sdk")
 await client.connect()
 client.on(EventType.USER_TURN, on_user_turn)
-await client.create_call(to="+821012345678", agent_id="agent-1", prompt="예약 확인")
+await client.create_call(to="+821012345678", prompt="예약 확인")
 await client.wait_closed()
 await client.aclose()
 ```
@@ -84,7 +84,7 @@ use camelCase keys (`sessionId`, `callId`, `turnIndex`, `previousStatus`,
 `failureReason`, `requestId`).
 | `DISCONNECTED` | `disconnected` | SDK-local; emitted when the WS closes |
 
-Commands: `await client.create_call(to, agent_id, prompt="", metadata=None)`,
+Commands: `await client.create_call(to, prompt="", metadata=None)`,
 `await client.answer(text, message_id=None)`,
 `await client.send_dtmf(digits, message_id=None)`, `await client.cancel()`.
 
@@ -101,7 +101,6 @@ Gateway error frames map 1:1 to exceptions
 | --- | --- |
 | `unauthenticated` | `AuthenticationError` (auth handshake; also close code 4401) |
 | `toRequired` | `ValidationError` |
-| `agentIdRequired` | `ValidationError` |
 | `callIdRequired` | `ValidationError` |
 | `callNotFound` | `ValidationError` |
 | `callNotCompleted` | `ValidationError` |
@@ -117,7 +116,7 @@ Gateway error frames map 1:1 to exceptions
 
 Command-level errors are also delivered to `EventType.ERROR` subscribers without
 closing the socket. `wait_closed()` re-raises the relevant error so a failed
-`create_call` (e.g. `toRequired`, `agentIdRequired`, `callRejected`) does not hang:
+`create_call` (e.g. `toRequired`, `callRejected`) does not hang:
 
 - auth failure (`unauthenticated` frame, close 4401, or `auth.ok` timeout) → `AuthenticationError`, raised from `connect()`
 - a call-start rejection → its mapped exception above

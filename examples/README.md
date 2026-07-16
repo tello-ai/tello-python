@@ -33,7 +33,6 @@ shell; do not commit credentials or real recipient numbers.
 ```sh
 export TELLO_API_KEY='tello_live_...'
 export TELLO_URL='wss://your-staging-gateway.example/sdk'
-export TELLO_AGENT_ID='your-published-agent-id'
 export LIVE_SMS_TO='+8210...controlled-test-recipient'
 export LIVE_CALL_TO='+8210...controlled-test-recipient'
 export LIVE_CALL_TIMEOUT_SECONDS=120
@@ -68,7 +67,7 @@ uv run python examples/call_summary_sms.py
 ```
 
 In addition to the shared gate, this scenario requires `TELLO_API_KEY`,
-`TELLO_URL`, `TELLO_AGENT_ID`, `LIVE_CALL_TO`, `LIVE_SMS_TO`, and
+`TELLO_URL`, `LIVE_CALL_TO`, `LIVE_SMS_TO`, and
 `LIVE_CALL_TIMEOUT_SECONDS`.
 
 `call.noAnswer`, `call.failed`, `call.statusChanged: cancelled`, gateway error

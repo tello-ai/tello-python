@@ -53,7 +53,6 @@ _CODE_TO_EXCEPTION: dict[str, type[TelloError]] = {
     "unauthenticated": AuthenticationError,
     "callAlreadyActive": CallAlreadyActiveError,
     "toRequired": ValidationError,
-    "agentIdRequired": ValidationError,
     "callIdRequired": ValidationError,
     "callNotFound": ValidationError,
     "callNotCompleted": ValidationError,

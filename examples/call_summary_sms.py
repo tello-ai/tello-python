@@ -21,7 +21,6 @@ def require_environment() -> dict[str, str | float]:
     required = (
         "TELLO_API_KEY",
         "TELLO_URL",
-        "TELLO_AGENT_ID",
         "LIVE_CALL_TO",
         "LIVE_SMS_TO",
         "LIVE_CALL_TIMEOUT_SECONDS",
@@ -40,7 +39,6 @@ def require_environment() -> dict[str, str | float]:
     return {
         "api_key": os.environ["TELLO_API_KEY"],
         "url": os.environ["TELLO_URL"],
-        "agent_id": os.environ["TELLO_AGENT_ID"],
         "call_to": os.environ["LIVE_CALL_TO"],
         "sms_to": os.environ["LIVE_SMS_TO"],
         "timeout_seconds": timeout_seconds,
@@ -203,10 +201,9 @@ async def main() -> None:
         def on_disconnected(_event) -> None:
             fail("gateway disconnected before scenario completed")
 
-        print(f"[createCall] to={config['call_to']} agentId={config['agent_id']}")
+        print(f"[createCall] to={config['call_to']}")
         await client.create_call(
             to=str(config["call_to"]),
-            agent_id=str(config["agent_id"]),
             prompt=str(config["prompt"]),
             metadata={"source": "tello-python-call-summary-sms-example"},
         )

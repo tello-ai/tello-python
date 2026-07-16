@@ -102,7 +102,6 @@ async def run(agent: Agent, client: TelloClient) -> None:
 
     await client.create_call(
         to="+821012345678",
-        agent_id="agent-1",
         prompt="예약 확인 전화",
         metadata={"source": "agent_callback_example"},
     )

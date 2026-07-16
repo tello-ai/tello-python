@@ -2,6 +2,11 @@
 
 ## 0.1.0 (unreleased)
 
+### Breaking changes (agent selection removed from the SDK contract)
+
+- **Breaking**: `create_call` no longer takes an `agent_id` parameter; the `createCall` wire frame never carries an `agentId` field (the gateway resolves the agent server-side). The `agentIdRequired` error code is gone from the contract.
+- **Breaking**: `list_agents` was removed entirely (the `listAgents` command, the `agents.listed` event, and the `AgentInfo` / `AgentsListedEvent` / `EventType.AGENTS_LISTED` symbols no longer exist).
+
 - Initial WS realtime client for turn-provider-gateway `/sdk`.
 - `TelloClient`: connect (internal `auth`/`auth.ok` handshake), `create_call` / `answer` / `send_dtmf` / `cancel`, pub/sub event handlers, `wait_closed`.
 - `send_dtmf(digits, message_id=None, request_id=None)`: mirrors `answer` but sends DTMF `digits` via the `sendDtmf` wire command.
@@ -23,7 +28,7 @@
 - Inbound frames are camelCase-only: event types `call.statusChanged` / `call.noAnswer`,
   keys `sessionId` / `callId` / `turnIndex` / `previousStatus` / `failureReason` / `requestId`,
   status vocabulary `inProgress` / `noAnswer` (etc.), error codes `toRequired` /
-  `agentIdRequired` / `callIdRequired` / `callNotFound` / `callNotCompleted` /
+  `callIdRequired` / `callNotFound` / `callNotCompleted` /
   `smsToRequired` / `smsMessageRequired` / `smsFailed` / `callAlreadyActive` /
   `noActiveCall` / `dtmfDigitsRequired` / `dtmfDigitsInvalid` / `callRejected` /
   `internalError`.
@@ -40,7 +45,7 @@
 ### Fixes (code review)
 
 - `wait_closed()` no longer hangs when the gateway rejects a `create_call`
-  (agentIdRequired / callRejected / internalError); it raises the mapped error.
+  (toRequired / callRejected / internalError); it raises the mapped error.
 - Abnormal mid-call disconnect now raises `ConnectionClosedError` instead of
   returning as a phantom success.
 - Receive loop drops valid-JSON non-object frames instead of crashing.

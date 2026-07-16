@@ -32,7 +32,7 @@ API key는 upgrade 요청, URL 쿼리, 로그, 예외 메시지 어디에도 노
    { "type": "auth.ok", "version": "1.0", "accountId": "<accountId>", "requestId": "<echoed when supplied>" }
    ```
 
-3. `auth.ok` 이후에만 `createCall` / `listAgents` / `answer` / `sendDtmf` / `cancel`
+3. `auth.ok` 이후에만 `createCall` / `answer` / `sendDtmf` / `cancel`
    / `getSummary` / `sendSms`를 보낼 수 있다.
 
 인증 실패 시 서버는 `error` 프레임(`code: "unauthenticated"`)을 보내고 close code `4401`로
@@ -61,7 +61,6 @@ API key는 upgrade 요청, URL 쿼리, 로그, 예외 메시지 어디에도 노
 ```json
 { "event": "createCall", "data": {
   "to": "+821012345678",          // 필수. 전화할 대상 번호. 비면 error: toRequired
-  "agentId": "agent-1",           // 필수. 비면 error: agentIdRequired
   "prompt": "예약 확인",           // 선택, 기본 ""
   "metadata": { "any": "json" },  // 선택
   "requestId": "req-1"            // 선택
@@ -139,7 +138,6 @@ status 어휘: `queued`, `dialing`, `ringing`, `inProgress`, `transferring`, `co
 | `unauthenticated` | Authentication required | 연결 시 발생, close 4401 동반 |
 | `callAlreadyActive` | A call is already active | |
 | `toRequired` | to is required | |
-| `agentIdRequired` | agentId is required | |
 | `callIdRequired` | callId is required | `getSummary`에 `callId` 누락 |
 | `callNotFound` | Call not found | `getSummary` 대상 통화 없음 |
 | `callNotCompleted` | Call is not completed | `getSummary` 통화가 아직 미완료 |

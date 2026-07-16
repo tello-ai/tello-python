@@ -15,7 +15,6 @@
     { "code": "unauthenticated", "message": "Authentication required", "closeCode": 4401, "sdkException": "AuthenticationError" },
     { "code": "callAlreadyActive", "message": "A call is already active", "sdkException": "CallAlreadyActiveError" },
     { "code": "toRequired", "message": "to is required", "sdkException": "ValidationError" },
-    { "code": "agentIdRequired", "message": "agentId is required", "sdkException": "ValidationError" },
     { "code": "callIdRequired", "message": "callId is required", "sdkException": "ValidationError" },
     { "code": "callNotFound", "message": "Call not found", "sdkException": "ValidationError" },
     { "code": "callNotCompleted", "message": "Call is not completed", "sdkException": "ValidationError" },

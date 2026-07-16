@@ -42,7 +42,6 @@ from .commands import (
     create_call_frame,
     encode,
     get_summary_frame,
-    list_agents_frame,
     send_dtmf_frame,
     send_sms_frame,
 )
@@ -77,7 +76,7 @@ class TelloClient(EventEmitter):
             @client.on(EventType.USER_TURN)
             async def _(event):
                 await client.answer(text="...")
-            await client.create_call(to="+821012345678", agent_id="agent-1", prompt="...")
+            await client.create_call(to="+821012345678", prompt="...")
             await client.wait_closed()
 
     ``api_key`` / ``url`` fall back to ``TELLO_API_KEY`` / ``TELLO_URL`` when omitted.
@@ -222,7 +221,6 @@ class TelloClient(EventEmitter):
     async def create_call(
         self,
         to: str,
-        agent_id: str,
         prompt: str = "",
         metadata: dict[str, Any] | None = None,
         request_id: str | None = None,
@@ -232,7 +230,7 @@ class TelloClient(EventEmitter):
         self._call_done.clear()
         self._call_error = None
         self._active = True
-        await self._send(create_call_frame(to, agent_id, prompt, metadata, request_id))
+        await self._send(create_call_frame(to, prompt, metadata, request_id))
 
     async def answer(
         self,
@@ -255,10 +253,6 @@ class TelloClient(EventEmitter):
     async def cancel(self) -> None:
         """Cancel the active call (no-op server-side if none active)."""
         await self._send(cancel_frame())
-
-    async def list_agents(self, request_id: str | None = None) -> None:
-        """Request callable agents for the authenticated account."""
-        await self._send(list_agents_frame(request_id))
 
     async def get_summary(self, call_id: str, request_id: str | None = None) -> None:
         """Request a completed call summary."""

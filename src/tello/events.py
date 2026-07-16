@@ -22,7 +22,6 @@ class EventType:
 
     USER_TURN = "user.turn"
     AGENT_TURN = "agent.turn"
-    AGENTS_LISTED = "agents.listed"
     CALL_SUMMARY = "call.summary"
     SMS_SENT = "sms.sent"
     ANSWER_ACCEPTED = "answer.accepted"
@@ -113,28 +112,6 @@ class ErrorEvent:
 
 
 @dataclass
-class AgentInfo:
-    """One callable agent returned by ``agents.listed``."""
-
-    agent_id: str
-    name: str
-    role: str
-    is_default: bool
-    status: str
-
-
-@dataclass
-class AgentsListedEvent:
-    """``agents.listed``, emitted in response to ``listAgents``."""
-
-    type: str
-    version: str
-    agents: list[AgentInfo]
-    raw: dict[str, Any]
-    request_id: str | None = None
-
-
-@dataclass
 class CallSummaryEvent:
     """``call.summary``, emitted in response to ``getSummary``."""
 
@@ -170,7 +147,6 @@ def parse_event(
 ) -> (
     Event
     | ErrorEvent
-    | AgentsListedEvent
     | CallSummaryEvent
     | SmsSentEvent
     | AnswerAcceptedEvent
@@ -191,15 +167,6 @@ def parse_event(
             message=frame.get("message", ""),
             request_id=frame.get("requestId"),
             question=frame.get("question"),
-            raw=frame,
-        )
-
-    if frame_type == EventType.AGENTS_LISTED:
-        return AgentsListedEvent(
-            type=frame_type,
-            version=frame.get("version", ""),
-            request_id=frame.get("requestId"),
-            agents=_agents(frame.get("agents")),
             raw=frame,
         )
 
@@ -275,25 +242,6 @@ def parse_event(
         )
 
     return Event(**base)
-
-
-def _agents(value: Any) -> list[AgentInfo]:
-    if not isinstance(value, list):
-        return []
-    agents = []
-    for row in value:
-        if not isinstance(row, dict):
-            continue
-        agents.append(
-            AgentInfo(
-                agent_id=row.get("agentId", ""),
-                name=row.get("name", ""),
-                role=row.get("role", ""),
-                is_default=row.get("isDefault") is True,
-                status=row.get("status", ""),
-            )
-        )
-    return agents
 
 
 def is_terminal(event: Event) -> bool:

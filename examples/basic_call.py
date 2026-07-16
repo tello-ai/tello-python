@@ -35,7 +35,7 @@ async def main() -> None:
         async def on_error(event):
             print(f"[error] {event.code}: {event.message}")
 
-        await client.create_call(to="+821012345678", agent_id="agent-1", prompt="예약 확인")
+        await client.create_call(to="+821012345678", prompt="예약 확인")
         await client.wait_closed()
 
 

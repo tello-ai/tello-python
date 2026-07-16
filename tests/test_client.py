@@ -179,10 +179,6 @@ def make_gateway(
                     # rejected create: send error, keep socket open, no terminal
                     await ws.send(_error("toRequired", "to is required", data.get("requestId")))
                     continue
-                if not data.get("agentId"):
-                    # rejected create: send error, keep socket open, no terminal
-                    await ws.send(_error("agentIdRequired", "agentId is required", data.get("requestId")))
-                    continue
                 if close_4429:
                     await ws.close(4429, "session replaced")
                     return
@@ -237,7 +233,7 @@ async def test_happy_path_streams_contract_order():
                 EventType.CALL_COMPLETED,
             ):
                 client.on(et, lambda e: seen.append(e.type))
-            await client.create_call(to="+821012345678", agent_id="agent-1", prompt="call the clinic")
+            await client.create_call(to="+821012345678", prompt="call the clinic")
             await client.wait_closed()
 
     assert seen == ["call.created", "call.statusChanged", "user.turn", "call.completed"]
@@ -254,7 +250,7 @@ async def test_user_turn_fields():
                 got["text"] = event.text
                 got["call_id"] = event.call_id
 
-            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.create_call(to="+821012345678")
             await client.wait_closed()
 
     assert got == {"index": 1, "text": "Need help", "call_id": "call-1"}
@@ -273,7 +269,7 @@ async def test_answer_produces_agent_turn():
             def _(event):
                 events.append((event.type, event.text))
 
-            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.create_call(to="+821012345678")
             await asyncio.sleep(0.05)  # let user.turn arrive
             await client.answer(text="The 2 PM slot is open.", request_id="answer-1")
             await asyncio.sleep(0.05)
@@ -295,7 +291,7 @@ async def test_send_dtmf_produces_agent_turn():
             def _(event):
                 turns.append((event.turn_index, event.text))
 
-            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.create_call(to="+821012345678")
             await asyncio.sleep(0.05)  # let user.turn arrive
             await client.send_dtmf(digits="1234#")
             await asyncio.sleep(0.05)
@@ -327,7 +323,7 @@ async def test_auth_is_first_frame_and_precedes_commands():
     received = []
     async with running(make_gateway(auto_complete=True, received=received)) as url:
         async with TelloClient(api_key=RAW_KEY, url=url) as client:
-            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.create_call(to="+821012345678")
             await client.wait_closed()
 
     events = [m.get("event") for m in received]
@@ -342,7 +338,7 @@ async def test_no_authorization_header_or_query_token_on_upgrade():
     sink = {}
     async with running(make_gateway(auto_complete=True, upgrade_sink=sink)) as url:
         async with TelloClient(api_key=RAW_KEY, url=url) as client:
-            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.create_call(to="+821012345678")
             await client.wait_closed()
 
     assert sink["authorization"] is None
@@ -357,7 +353,7 @@ async def test_business_command_blocked_until_auth_ok():
     async with running(make_gateway(auto_complete=True, auth_delay=0.2, received=received)) as url:
         client = TelloClient(api_key=RAW_KEY, url=url)
         await client.connect()  # blocks ~0.2s until auth.ok
-        await client.create_call(to="+821012345678", agent_id="agent-1")
+        await client.create_call(to="+821012345678")
         await client.wait_closed()
         await client.aclose()
 
@@ -403,28 +399,45 @@ async def test_api_key_never_in_auth_exception_message():
         await client.aclose()
 
 
-async def test_rejected_create_unblocks_wait_closed():
-    # gateway rejects create_call (empty agentId) with an error frame and no
+async def test_rejected_create_missing_to_unblocks_wait_closed():
+    # gateway rejects create_call (empty to) with an error frame and no
     # terminal/close; wait_closed() must raise, not hang.
     async with running(make_gateway(auto_complete=False)) as url:
         async with TelloClient(api_key=RAW_KEY, url=url) as client:
-            await client.create_call(to="+821012345678", agent_id="")
+            await client.create_call(to="")
             with pytest.raises(ValidationError):
                 await asyncio.wait_for(client.wait_closed(), timeout=2)
 
 
-async def test_rejected_create_missing_to_unblocks_wait_closed():
-    async with running(make_gateway(auto_complete=False)) as url:
+async def test_create_call_wire_frame_has_no_agent_id_key():
+    # Contract: the createCall data payload must never contain an agentId key.
+    received = []
+    async with running(make_gateway(auto_complete=True, received=received)) as url:
         async with TelloClient(api_key=RAW_KEY, url=url) as client:
-            await client.create_call(to="", agent_id="agent-1")
-            with pytest.raises(ValidationError):
-                await asyncio.wait_for(client.wait_closed(), timeout=2)
+            await client.create_call(
+                to="+821012345678",
+                prompt="call the clinic",
+                metadata={"src": "test"},
+                request_id="r1",
+            )
+            await client.wait_closed()
+
+    create_frames = [m for m in received if m.get("event") == "createCall"]
+    assert len(create_frames) == 1
+    data = create_frames[0]["data"]
+    assert "agentId" not in data
+    assert data == {
+        "to": "+821012345678",
+        "prompt": "call the clinic",
+        "metadata": {"src": "test"},
+        "requestId": "r1",
+    }
 
 
 async def test_abnormal_disconnect_raises():
     async with running(make_gateway(drop_after_user_turn=True)) as url:
         async with TelloClient(api_key=RAW_KEY, url=url) as client:
-            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.create_call(to="+821012345678")
             with pytest.raises(ConnectionClosedError):
                 await asyncio.wait_for(client.wait_closed(), timeout=2)
 
@@ -434,7 +447,7 @@ async def test_non_object_frame_is_dropped_not_fatal():
     async with running(make_gateway(auto_complete=True, scalar_frame=True)) as url:
         async with TelloClient(api_key=RAW_KEY, url=url) as client:
             client.on(EventType.CALL_COMPLETED, lambda e: completed.append(e.call_id))
-            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.create_call(to="+821012345678")
             await client.wait_closed()
     assert completed == ["call-1"]  # bad frame dropped, stream continued
 
@@ -444,7 +457,7 @@ async def test_disconnected_event_is_typed_event():
     async with running(make_gateway(auto_complete=True)) as url:
         async with TelloClient(api_key=RAW_KEY, url=url) as client:
             client.on(EventType.DISCONNECTED, lambda e: seen.append(e.type))
-            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.create_call(to="+821012345678")
             await client.wait_closed()
     # aclose() ends the recv loop, which emits a typed DISCONNECTED Event
     assert seen == [EventType.DISCONNECTED]
@@ -453,7 +466,7 @@ async def test_disconnected_event_is_typed_event():
 async def test_session_replaced_close_raises():
     async with running(make_gateway(close_4429=True)) as url:
         async with TelloClient(api_key=RAW_KEY, url=url) as client:
-            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.create_call(to="+821012345678")
             with pytest.raises(SessionReplacedError):
                 await asyncio.wait_for(client.wait_closed(), timeout=2)
 
@@ -465,7 +478,7 @@ async def test_env_var_config(monkeypatch):
         completed = []
         async with TelloClient() as client:  # no args -> read env
             client.on(EventType.CALL_COMPLETED, lambda e: completed.append(e.call_id))
-            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.create_call(to="+821012345678")
             await client.wait_closed()
     assert completed == ["call-1"]
 
@@ -483,7 +496,7 @@ async def test_heartbeat_pong_keeps_connection_alive():
     async with running(make_gateway(auto_complete=True, ping_on_create=True)) as url:
         async with TelloClient(api_key=RAW_KEY, url=url) as client:
             client.on(EventType.CALL_COMPLETED, lambda e: completed.append(e.call_id))
-            await client.create_call(to="+821012345678", agent_id="agent-1")
+            await client.create_call(to="+821012345678")
             await client.wait_closed()
 
     assert completed == ["call-1"]
