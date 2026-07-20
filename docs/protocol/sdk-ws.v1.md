@@ -33,7 +33,7 @@ API key는 upgrade 요청, URL 쿼리, 로그, 예외 메시지 어디에도 노
    ```
 
 3. `auth.ok` 이후에만 `createCall` / `answer` / `sendDtmf` / `cancel`
-   / `getSummary` / `sendSms`를 보낼 수 있다.
+   / `getSummary`를 보낼 수 있다.
 
 인증 실패 시 서버는 `error` 프레임(`code: "unauthenticated"`)을 보내고 close code `4401`로
 연결을 종료한다. `auth.ok`를 기다리는 타임아웃(서버 데드라인 5초) 역시 연결 실패로 취급한다.
@@ -141,9 +141,6 @@ status 어휘: `queued`, `dialing`, `ringing`, `inProgress`, `transferring`, `co
 | `callIdRequired` | callId is required | `getSummary`에 `callId` 누락 |
 | `callNotFound` | Call not found | `getSummary` 대상 통화 없음 |
 | `callNotCompleted` | Call is not completed | `getSummary` 통화가 아직 미완료 |
-| `smsToRequired` | SMS recipient is required | `sendSms`에 `to` 누락 |
-| `smsMessageRequired` | SMS message is required | `sendSms`에 `message` 누락 |
-| `smsFailed` | SMS send failed | `sendSms` 전송 실패 |
 | `noActiveCall` | No active call | |
 | `dtmfDigitsRequired` | digits is required | `sendDtmf`에 `digits` 누락 |
 | `dtmfDigitsInvalid` | digits must contain only 0-9, *, # | `sendDtmf` `digits`에 허용 외 문자 |

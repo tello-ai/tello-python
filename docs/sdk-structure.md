@@ -281,7 +281,7 @@ sdk/contracts/errors/errors.v1.json
 }
 ```
 
-`code` 목록: `unauthenticated`, `callAlreadyActive`, `toRequired`, `agentIdRequired`, `callIdRequired`, `callNotFound`, `callNotCompleted`, `smsToRequired`, `smsMessageRequired`, `smsFailed`, `noActiveCall`, `dtmfDigitsRequired`, `dtmfDigitsInvalid`, `callRejected`, `internalError`. `requestId`는 클라이언트가 명령에 `requestId`를 넣었을 때만 에코된다. `callRejected`는 `question` 필드를 동반할 수 있다.
+`code` 목록: `unauthenticated`, `callAlreadyActive`, `toRequired`, `agentIdRequired`, `callIdRequired`, `callNotFound`, `callNotCompleted`, `noActiveCall`, `dtmfDigitsRequired`, `dtmfDigitsInvalid`, `callRejected`, `internalError`. `requestId`는 클라이언트가 명령에 `requestId`를 넣었을 때만 에코된다. `callRejected`는 `question` 필드를 동반할 수 있다.
 
 ---
 
@@ -332,14 +332,11 @@ gateway 에러 코드를 SDK 예외 타입으로 1:1 매핑한다.
 | `callIdRequired` | `ValidationError` |
 | `callNotFound` | `ValidationError` |
 | `callNotCompleted` | `ValidationError` |
-| `smsToRequired` | `ValidationError` |
-| `smsMessageRequired` | `ValidationError` |
 | `dtmfDigitsRequired` | `ValidationError` |
 | `dtmfDigitsInvalid` | `ValidationError` |
 | `callAlreadyActive` | `CallAlreadyActiveError` |
 | `noActiveCall` | `NoActiveCallError` |
 | `callRejected` | `CallRejectedError` (`question` 포함) |
-| `smsFailed` | `TelloServerError` |
 | `internalError` | `TelloServerError` |
 
 연결 인증 실패 close(`4401`)도 `AuthenticationError`로 매핑한다.

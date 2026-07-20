@@ -43,7 +43,6 @@ from .commands import (
     encode,
     get_summary_frame,
     send_dtmf_frame,
-    send_sms_frame,
 )
 from .config import DEFAULT_URL, ENV_API_KEY, ENV_URL, ClientConfig
 from .errors import (
@@ -257,15 +256,6 @@ class TelloClient(EventEmitter):
     async def get_summary(self, call_id: str, request_id: str | None = None) -> None:
         """Request a completed call summary."""
         await self._send(get_summary_frame(call_id, request_id))
-
-    async def send_sms(
-        self,
-        to: str,
-        message: str,
-        request_id: str | None = None,
-    ) -> None:
-        """Send an SMS through the authenticated account."""
-        await self._send(send_sms_frame(to, message, request_id))
 
     async def _send(self, frame: dict[str, Any]) -> None:
         if self._ws is None:

@@ -1,6 +1,6 @@
-"""Run a controlled call, then fetch its summary and send one follow-up SMS.
+"""Run a controlled call, then fetch its summary.
 
-This is intentionally not a test: it creates a real call and SMS. Read
+This is intentionally not a test: it creates a real call. Read
 ``examples/README.md`` before running it.
 """
 
@@ -22,7 +22,6 @@ def require_environment() -> dict[str, str | float]:
         "TELLO_API_KEY",
         "TELLO_URL",
         "LIVE_CALL_TO",
-        "LIVE_SMS_TO",
         "LIVE_CALL_TIMEOUT_SECONDS",
     )
     missing = [name for name in required if not os.environ.get(name)]
@@ -40,7 +39,6 @@ def require_environment() -> dict[str, str | float]:
         "api_key": os.environ["TELLO_API_KEY"],
         "url": os.environ["TELLO_URL"],
         "call_to": os.environ["LIVE_CALL_TO"],
-        "sms_to": os.environ["LIVE_SMS_TO"],
         "timeout_seconds": timeout_seconds,
         "prompt": os.environ.get(
             "LIVE_CALL_PROMPT",
@@ -49,10 +47,6 @@ def require_environment() -> dict[str, str | float]:
         "reply": os.environ.get(
             "LIVE_CALL_REPLY",
             "This is a controlled TPG SDK live scenario. Thank you.",
-        ),
-        "sms_message": os.environ.get(
-            "LIVE_SMS_MESSAGE",
-            "[TPG live scenario] the controlled call completed successfully.",
         ),
     }
 
@@ -79,10 +73,8 @@ async def main() -> None:
     answer_accepted = loop.create_future()
     agent_turn_received = loop.create_future()
     summary_received = loop.create_future()
-    sms_sent = loop.create_future()
     failed = loop.create_future()
     summary_request_id = f"live-summary-{uuid.uuid4()}"
-    sms_request_id = f"live-sms-{uuid.uuid4()}"
     answer_request_id = f"live-answer-{uuid.uuid4()}"
     answer_message_id = f"live-message-{uuid.uuid4()}"
     answer_sent = False
@@ -187,12 +179,6 @@ async def main() -> None:
                 print(f"[call.summary] callId={event.call_id} status={event.status}")
                 summary_received.set_result(event)
 
-        @client.on(EventType.SMS_SENT)
-        def on_sms_sent(event) -> None:
-            if event.request_id == sms_request_id and not sms_sent.done():
-                print(f"[sms.sent] id={event.sms_id} status={event.status} to={event.to}")
-                sms_sent.set_result(event)
-
         @client.on(EventType.ERROR)
         def on_error(event) -> None:
             fail(f"gateway error {event.code}: {event.message}")
@@ -205,7 +191,7 @@ async def main() -> None:
         await client.create_call(
             to=str(config["call_to"]),
             prompt=str(config["prompt"]),
-            metadata={"source": "tello-python-call-summary-sms-example"},
+            metadata={"source": "tello-python-call-summary-example"},
         )
         try:
             await wait_for_stage(call_created, failed, "call.created", timeout_seconds)
@@ -229,17 +215,9 @@ async def main() -> None:
         if summary.call_id != call_id or summary.status != "completed":
             raise RuntimeError("call.summary did not confirm the completed call")
 
-        print(f"[sendSms] requestId={sms_request_id} to={config['sms_to']}")
-        await client.send_sms(
-            to=str(config["sms_to"]),
-            message=str(config["sms_message"]),
-            request_id=sms_request_id,
-        )
-        await wait_for_stage(sms_sent, failed, "sms.sent", timeout_seconds)
-
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (RuntimeError, TimeoutError, TelloError) as exc:
-        raise SystemExit(f"live call-summary-SMS scenario failed: {exc}") from exc
+        raise SystemExit(f"live call-summary scenario failed: {exc}") from exc

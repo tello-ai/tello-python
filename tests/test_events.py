@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from tello.commands import answer_frame, cancel_frame, create_call_frame, get_summary_frame, send_sms_frame
+from tello.commands import answer_frame, cancel_frame, create_call_frame, get_summary_frame
 from tello.events import (
     AnswerAcceptedEvent,
     CallCreatedEvent,
@@ -9,7 +9,6 @@ from tello.events import (
     DtmfAcceptedEvent,
     ErrorEvent,
     EventType,
-    SmsSentEvent,
     StatusChangedEvent,
     TerminalEvent,
     TurnEvent,
@@ -51,18 +50,10 @@ def test_answer_and_cancel_frames():
     assert cancel_frame() == {"event": "cancel", "data": {}}
 
 
-def test_summary_and_sms_frames():
+def test_summary_frame():
     assert get_summary_frame("call-1", "summary-1") == {
         "event": "getSummary",
         "data": {"callId": "call-1", "requestId": "summary-1"},
-    }
-    assert send_sms_frame("01012345678", "예약 확인", "sms-1") == {
-        "event": "sendSms",
-        "data": {"to": "01012345678", "message": "예약 확인", "requestId": "sms-1"},
-    }
-    assert send_sms_frame("01012345678", "예약 확인") == {
-        "event": "sendSms",
-        "data": {"to": "01012345678", "message": "예약 확인"},
     }
 
 
@@ -168,7 +159,7 @@ def test_parse_call_rejected_carries_question():
     assert event.question == "why?"
 
 
-def test_parse_call_summary_and_sms_sent():
+def test_parse_call_summary():
     summary = parse_event(
         {
             "type": "call.summary",
@@ -189,21 +180,6 @@ def test_parse_call_summary_and_sms_sent():
         42,
         15,
     )
-
-    sms = parse_event(
-        {
-            "type": "sms.sent",
-            "version": "1.0",
-            "requestId": "sms-1",
-            "smsId": "77",
-            "status": "queued",
-            "to": "01012345678",
-            "messagePreview": "예약 확인",
-            "callId": "call-1",
-        }
-    )
-    assert isinstance(sms, SmsSentEvent)
-    assert (sms.request_id, sms.sms_id, sms.status, sms.call_id) == ("sms-1", "77", "queued", "call-1")
 
 
 def test_terminal_detection():
@@ -278,7 +254,6 @@ def test_event_type_constants():
     assert EventType.DTMF_ACCEPTED == "dtmf.accepted"
     assert EventType.USER_TURN == "user.turn"
     assert EventType.CALL_SUMMARY == "call.summary"
-    assert EventType.SMS_SENT == "sms.sent"
     assert EventType.CALL_STATUS_CHANGED == "call.statusChanged"
     assert EventType.CALL_NO_ANSWER == "call.noAnswer"
 

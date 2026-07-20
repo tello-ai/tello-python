@@ -2,6 +2,12 @@
 
 ## 0.1.0 (unreleased)
 
+### Breaking changes (SMS removed from the SDK contract)
+
+- **Breaking**: `send_sms` was removed entirely (the `sendSms` command, the `sms.sent` event, and the `SmsSentEvent` / `EventType.SMS_SENT` symbols no longer exist). The gateway dropped the `sendSms` handler, so a client still sending the frame matches no handler, receives no response at all, and blocks until its own timeout.
+- **Breaking**: the `smsToRequired` / `smsMessageRequired` / `smsFailed` error codes are gone from the contract and from the error-code → exception mapping.
+- **Breaking**: `examples/send_sms.py` was deleted, and `examples/call_summary_sms.py` became `examples/call_summary.py` (the call → `getSummary` half is unchanged; only the follow-up SMS was dropped). `LIVE_SMS_TO` / `LIVE_SMS_MESSAGE` are no longer read by any example.
+
 ### Breaking changes (agent selection removed from the SDK contract)
 
 - **Breaking**: `create_call` no longer takes an `agent_id` parameter; the `createCall` wire frame never carries an `agentId` field (the gateway resolves the agent server-side). The `agentIdRequired` error code is gone from the contract.
@@ -28,13 +34,10 @@
 - Inbound frames are camelCase-only: event types `call.statusChanged` / `call.noAnswer`,
   keys `sessionId` / `callId` / `turnIndex` / `previousStatus` / `failureReason` / `requestId`,
   status vocabulary `inProgress` / `noAnswer` (etc.), error codes `toRequired` /
-  `callIdRequired` / `callNotFound` / `callNotCompleted` /
-  `smsToRequired` / `smsMessageRequired` / `smsFailed` / `callAlreadyActive` /
+  `callIdRequired` / `callNotFound` / `callNotCompleted` / `callAlreadyActive` /
   `noActiveCall` / `dtmfDigitsRequired` / `dtmfDigitsInvalid` / `callRejected` /
   `internalError`.
 - Added `dtmf.accepted` event parsing (`DtmfAcceptedEvent`), acking a `sendDtmf` command.
-- `send_sms(to, message, request_id=None)` no longer accepts/sends `call_id`
-  (the `sendSms` wire command carries only `to` / `message` / `requestId`).
 - Python attribute names stay snake_case (`event.call_id`, `event.turn_index`, ...);
   `Event` gains a `session_id` attribute (parsed from `sessionId`).
 - Outbound commands were already camelCase and are unchanged.

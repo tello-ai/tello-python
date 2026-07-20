@@ -23,7 +23,6 @@ class EventType:
     USER_TURN = "user.turn"
     AGENT_TURN = "agent.turn"
     CALL_SUMMARY = "call.summary"
-    SMS_SENT = "sms.sent"
     ANSWER_ACCEPTED = "answer.accepted"
     DTMF_ACCEPTED = "dtmf.accepted"
     CALL_CREATED = "call.created"
@@ -127,28 +126,12 @@ class CallSummaryEvent:
     request_id: str | None = None
 
 
-@dataclass
-class SmsSentEvent:
-    """``sms.sent``, emitted in response to ``sendSms``."""
-
-    type: str
-    version: str
-    sms_id: str
-    status: str
-    to: str
-    message_preview: str
-    raw: dict[str, Any]
-    request_id: str | None = None
-    call_id: str | None = None
-
-
 def parse_event(
     frame: dict[str, Any],
 ) -> (
     Event
     | ErrorEvent
     | CallSummaryEvent
-    | SmsSentEvent
     | AnswerAcceptedEvent
     | DtmfAcceptedEvent
 ):
@@ -181,19 +164,6 @@ def parse_event(
             transcript=frame.get("transcript"),
             summary=frame.get("summary"),
             credit_charged=frame.get("creditCharged"),
-            raw=frame,
-        )
-
-    if frame_type == EventType.SMS_SENT:
-        return SmsSentEvent(
-            type=frame_type,
-            version=frame.get("version", ""),
-            request_id=frame.get("requestId"),
-            sms_id=frame.get("smsId", ""),
-            status=frame.get("status", ""),
-            to=frame.get("to", ""),
-            message_preview=frame.get("messagePreview", ""),
-            call_id=frame.get("callId"),
             raw=frame,
         )
 

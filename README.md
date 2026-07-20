@@ -104,14 +104,11 @@ Gateway error frames map 1:1 to exceptions
 | `callIdRequired` | `ValidationError` |
 | `callNotFound` | `ValidationError` |
 | `callNotCompleted` | `ValidationError` |
-| `smsToRequired` | `ValidationError` |
-| `smsMessageRequired` | `ValidationError` |
 | `dtmfDigitsRequired` | `ValidationError` |
 | `dtmfDigitsInvalid` | `ValidationError` |
 | `callAlreadyActive` | `CallAlreadyActiveError` |
 | `noActiveCall` | `NoActiveCallError` |
 | `callRejected` | `CallRejectedError` (with `.question`) |
-| `smsFailed` | `TelloServerError` |
 | `internalError` | `TelloServerError` |
 
 Command-level errors are also delivered to `EventType.ERROR` subscribers without
