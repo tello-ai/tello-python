@@ -1,6 +1,8 @@
+**English** | [한국어](README.ko.md)
+
 # tello-sdk (Python)
 
-> 리포: `tello-python` · PyPI 배포명: `tello-sdk` · import: `tello`
+> repo: `tello-python` · PyPI package: `tello-sdk` · import: `tello`
 
 Tello SDK for Python — a thin **WebSocket** realtime client for the
 turn-provider-gateway `/sdk` endpoint. The SDK is the "conversation brain":
@@ -71,22 +73,28 @@ Subscribe handlers (sync or async) per event type via `client.on(...)`:
 
 | `EventType` | value | payload fields |
 | --- | --- | --- |
+| `CALL_CREATED` | `call.created` | `call_id`, `session_id` |
 | `USER_TURN` | `user.turn` | `turn_index`, `text` |
 | `AGENT_TURN` | `agent.turn` | `turn_index`, `text` |
+| `ANSWER_ACCEPTED` | `answer.accepted` | `request_id?`, `message_id` |
+| `DTMF_ACCEPTED` | `dtmf.accepted` | `request_id?`, `message_id`, `digits` |
+| `CALL_SUMMARY` | `call.summary` | `request_id?`, `status`, `duration_seconds?`, `transcript?`, `summary?`, `credit_charged?` |
 | `CALL_STATUS_CHANGED` | `call.statusChanged` | `status`, `previous_status` |
 | `CALL_COMPLETED` | `call.completed` | `status` |
 | `CALL_NO_ANSWER` | `call.noAnswer` | `status`, `failure_reason?` |
 | `CALL_FAILED` | `call.failed` | `status`, `failure_reason?` |
 | `ERROR` | `error` | `code`, `message`, `request_id?`, `question?` |
+| `DISCONNECTED` | `disconnected` | SDK-local; emitted when the WS closes |
 
 Payload fields above are the Python attribute names; the wire frames themselves
 use camelCase keys (`sessionId`, `callId`, `turnIndex`, `previousStatus`,
-`failureReason`, `requestId`).
-| `DISCONNECTED` | `disconnected` | SDK-local; emitted when the WS closes |
+`failureReason`, `requestId`). An unknown `type` falls back to the base `Event`
+so forward-compatible additions still reach subscribers.
 
 Commands: `await client.create_call(to, prompt="", metadata=None)`,
 `await client.answer(text, message_id=None)`,
-`await client.send_dtmf(digits, message_id=None)`, `await client.cancel()`.
+`await client.send_dtmf(digits, message_id=None)`, `await client.cancel()`,
+`await client.get_summary(call_id, request_id=None)`.
 
 `await client.wait_closed()` resolves when the call reaches a terminal state
 (`call.completed` / `call.noAnswer` / `call.failed`, or a cancelled status) or
@@ -124,6 +132,18 @@ The gateway drives a WS-level ping heartbeat; `websockets` answers pongs
 automatically. There is no reconnect/resume — treat an abnormal close as
 reconnect-worthy and restart the call.
 
-## 6. Version compatibility
+## 6. Examples
+
+Runnable programs live in [`examples/`](examples/README.md):
+
+```bash
+uv run python examples/basic_call.py       # connect, one call, answer each turn
+uv run python examples/agent_callback.py   # full lifecycle, history, cancel, typed errors
+uv run python examples/call_summary.py     # gated live scenario ending in call.summary
+```
+
+They place real calls. Read [`examples/README.md`](examples/README.md) first.
+
+## 7. Version compatibility
 
 `tello-sdk 0.1.x` implements Tello WS protocol `1.0`.
