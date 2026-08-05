@@ -1,13 +1,22 @@
 """SDK exception hierarchy, mapped 1:1 from gateway error codes.
 
-See ``contracts/errors/errors.v1.json``.
+See ``docs/errors/errors.v1.json``.
 """
 
 from __future__ import annotations
 
 
 class TelloError(Exception):
-    """Base class for all Tello SDK errors."""
+    """Base class for all Tello SDK errors.
+
+    ``code`` is the gateway error code this was built from, when there was one.
+    Branch on it rather than on the message: the message is display text the
+    gateway may reword, the code is the contract.
+    """
+
+    def __init__(self, message: str, code: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class ConnectionClosedError(TelloError):
@@ -40,9 +49,30 @@ class CallRejectedError(TelloError):
     ``question`` carries the clarifying question the gateway returned.
     """
 
-    def __init__(self, message: str, question: str | None = None) -> None:
-        super().__init__(message)
+    def __init__(
+        self, message: str, question: str | None = None, code: str | None = None
+    ) -> None:
+        super().__init__(message, code)
         self.question = question
+
+
+class CallRefusedError(TelloError):
+    """``create_call`` was refused by an account policy gate.
+
+    Raised before any call exists: no ``call.created``, no call id, no charge.
+    The account owner can act on ``insufficientCredit``, ``callerNotVerified``
+    and ``noRepresentativeNumber``; only ``concurrentLimitExceeded`` can succeed
+    on a later attempt. The gateway never retries, so any retry policy is the
+    caller's. Branch on ``code``.
+    """
+
+
+class CallProviderError(TelloError):
+    """``create_call`` was refused by a condition on the service side.
+
+    The caller did not cause it and cannot fix it. ``callProviderDraining`` and
+    ``callProviderUnavailable`` may succeed later; the other two will not.
+    """
 
 
 class TelloServerError(TelloError):
@@ -60,6 +90,14 @@ _CODE_TO_EXCEPTION: dict[str, type[TelloError]] = {
     "dtmfDigitsRequired": ValidationError,
     "dtmfDigitsInvalid": ValidationError,
     "callRejected": CallRejectedError,
+    "insufficientCredit": CallRefusedError,
+    "concurrentLimitExceeded": CallRefusedError,
+    "callerNotVerified": CallRefusedError,
+    "noRepresentativeNumber": CallRefusedError,
+    "callProviderUnauthorized": CallProviderError,
+    "callProviderDraining": CallProviderError,
+    "callProviderUnavailable": CallProviderError,
+    "callSetupFailed": CallProviderError,
     "internalError": TelloServerError,
 }
 
@@ -68,5 +106,5 @@ def exception_for(code: str, message: str, question: str | None = None) -> Tello
     """Build the SDK exception for a gateway error ``code``."""
     exc_type = _CODE_TO_EXCEPTION.get(code, TelloServerError)
     if exc_type is CallRejectedError:
-        return CallRejectedError(message, question=question)
-    return exc_type(message)
+        return CallRejectedError(message, question=question, code=code)
+    return exc_type(message, code)

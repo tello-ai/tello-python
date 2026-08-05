@@ -21,6 +21,8 @@ from .config import DEFAULT_URL, ClientConfig
 from .errors import (
     AuthenticationError,
     CallAlreadyActiveError,
+    CallProviderError,
+    CallRefusedError,
     CallRejectedError,
     ConnectionClosedError,
     NoActiveCallError,
@@ -71,6 +73,8 @@ __all__ = [
     "CallAlreadyActiveError",
     "NoActiveCallError",
     "CallRejectedError",
+    "CallRefusedError",
+    "CallProviderError",
     "SessionReplacedError",
     "TelloServerError",
 ]
