@@ -172,6 +172,7 @@ def make_gateway(
         await ws.send(_auth_ok(data.get("requestId")))
 
         active = False
+        status = None  # the live call's current status
         stream_tasks = []
 
         async def fail_stream(create_request_id):
@@ -212,6 +213,7 @@ def make_gateway(
                 active = True
                 await ws.send(_call_created())
                 await ws.send(_status_changed("inProgress", "queued"))
+                status = "inProgress"
                 if scalar_frame:
                     await ws.send(json.dumps(123))  # valid JSON, non-object
                 await ws.send(_user_turn(1, "Need help"))
@@ -242,8 +244,12 @@ def make_gateway(
                     continue
                 await ws.send(_agent_turn(2, data.get("digits", "")))
             elif event == "cancel":
-                await ws.send(_completed())
-                active = False
+                # A no-op without a live call. Otherwise the cancelled
+                # call.statusChanged, carrying the status it replaced, is the
+                # call's terminal event (contract §4.4).
+                if active:
+                    await ws.send(_status_changed("cancelled", status))
+                    active = False
         for task in stream_tasks:  # socket closed: an unfired failure has no one to reach
             task.cancel()
 
@@ -470,7 +476,7 @@ async def test_other_command_error_does_not_end_call_wait():
             await asyncio.sleep(0.05)
             assert not waiting.done()  # the call is still live
 
-            await client.cancel()  # the fake gateway ends the call with call.completed
+            await client.cancel()  # the fake gateway ends the call with a cancelled status
             await asyncio.wait_for(waiting, timeout=2)
 
     assert errors == [("dtmfDigitsInvalid", "dtmf-1"), ("dtmfDigitsInvalid", None)]
