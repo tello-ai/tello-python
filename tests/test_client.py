@@ -16,6 +16,7 @@ from websockets.exceptions import ConnectionClosed
 
 from tello import (
     AuthenticationError,
+    CallAlreadyActiveError,
     CallRefusedError,
     ClientConfig,
     ConnectionClosedError,
@@ -139,8 +140,11 @@ def make_gateway(
     upgrade_sink=None,
     refuse_create=None,
     stream_failure=None,
+    cleanup_window=0,
 ):
     async def handler(ws):
+        # Used up once per gateway, not per connection, so a reconnect moves on.
+        nonlocal cleanup_window, drop_after_user_turn
         if upgrade_sink is not None:
             upgrade_sink["authorization"] = ws.request.headers.get("Authorization")
             upgrade_sink["path"] = ws.request.path
@@ -192,8 +196,12 @@ def make_gateway(
             data = msg.get("data", {})
 
             if event == "createCall":
-                if active:
-                    # the running call continues untouched
+                if active or cleanup_window:
+                    # A live call continues untouched. Without one, a createCall
+                    # landing in the previous call's cleanup window (contract
+                    # §4.1) is refused the same way, and no call.created follows.
+                    if not active:
+                        cleanup_window -= 1
                     await ws.send(
                         _error("callAlreadyActive", "A call is already active", data.get("requestId"))
                     )
@@ -218,7 +226,10 @@ def make_gateway(
                     await ws.send(json.dumps(123))  # valid JSON, non-object
                 await ws.send(_user_turn(1, "Need help"))
                 if drop_after_user_turn:
-                    await ws.close()  # abnormal: close mid-call, no terminal
+                    # abnormal: close mid-call, no terminal. Only the first call
+                    # drops, so a test can reconnect and place another.
+                    drop_after_user_turn = False
+                    await ws.close()
                     return
                 if ping_on_create:
                     pong_waiter = await ws.ping()
@@ -533,6 +544,170 @@ async def test_create_call_during_active_call_keeps_tracking_that_call():
             stream_failure.set()
             with pytest.raises(TelloServerError):
                 await asyncio.wait_for(client.wait_closed(), timeout=2)
+
+
+async def test_call_already_active_answering_the_opening_create_call_ends_call_wait():
+    # T5. Right after a call ends the gateway still holds the session until it
+    # has cleaned that call up (contract §4.1): a createCall landing in that
+    # window gets callAlreadyActive and no call.created. That call never
+    # started, so the wait raises, and a retry starts a fresh call.
+    errors = []
+    completed = []
+    async with running(make_gateway(auto_complete=True, cleanup_window=1)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            client.on(EventType.ERROR, lambda e: errors.append((e.code, e.request_id)))
+            client.on(EventType.CALL_COMPLETED, lambda e: completed.append(e.call_id))
+            await client.create_call(to="+821012345678", request_id="create-a")
+            with pytest.raises(CallAlreadyActiveError):
+                await asyncio.wait_for(client.wait_closed(), timeout=2)
+
+            await client.create_call(to="+821012345678", request_id="create-b")
+            await asyncio.wait_for(client.wait_closed(), timeout=2)
+            assert completed == ["call-1"]  # the retry's wait ended at its call.completed
+
+    assert errors == [("callAlreadyActive", "create-a")]
+
+
+async def test_create_call_refused_during_a_live_call_keeps_the_pending_wait():
+    # T6. A createCall sent during a live call is refused with callAlreadyActive
+    # and the live call goes on. That refusal is only an event: a wait already
+    # pending on the live call stays with it and ends with the live call's own
+    # createCall failure.
+    stream_failure = asyncio.Event()
+    created = asyncio.Event()
+    refused = asyncio.Event()
+    errors = []
+    async with running(make_gateway(auto_complete=False, stream_failure=stream_failure)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            client.on(EventType.CALL_CREATED, lambda e: created.set())
+
+            @client.on(EventType.ERROR)
+            def _(event):
+                errors.append((event.code, event.request_id))
+                refused.set()
+
+            await client.create_call(to="+821012345678", request_id="create-a")
+            await asyncio.wait_for(created.wait(), timeout=2)
+            waiting = asyncio.create_task(client.wait_closed())
+            await client.create_call(to="+821012345678", request_id="create-b")
+            await asyncio.wait_for(refused.wait(), timeout=2)
+
+            stream_failure.set()
+            with pytest.raises(TelloServerError):
+                await asyncio.wait_for(waiting, timeout=2)
+
+    assert errors == [("callAlreadyActive", "create-b"), ("internalError", "create-a")]
+
+
+async def test_wait_ends_with_its_own_call_when_a_terminal_handler_starts_the_next():
+    # T7. A wait started during call A returns when A ends, even though A's
+    # terminal handler has already started call B. B is a call of its own: an
+    # error echoing A's createCall requestId does not end it, and a new wait
+    # follows B to its own terminal event.
+    calls_created = asyncio.Queue()
+    errors = []
+    follow_ups = []
+    async with running(make_gateway(auto_complete=False)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            client.on(EventType.CALL_CREATED, calls_created.put_nowait)
+            client.on(EventType.ERROR, lambda e: errors.append((e.code, e.request_id)))
+
+            @client.on(EventType.CALL_STATUS_CHANGED)
+            async def _(event):
+                if event.status == "cancelled" and not follow_ups:
+                    follow_ups.append(event)
+                    await client.create_call(to="+821012345678", request_id="create-b")
+
+            await client.create_call(to="+821012345678", request_id="create-a")
+            await asyncio.wait_for(calls_created.get(), timeout=2)
+            first = asyncio.create_task(client.wait_closed())
+            await client.cancel()  # A's terminal, whose handler starts B
+            await asyncio.wait_for(first, timeout=2)
+
+            await asyncio.wait_for(calls_created.get(), timeout=2)
+            second = asyncio.create_task(client.wait_closed())
+            # Reusing A's createCall requestId on another command draws an
+            # error that echoes it.
+            await client.send_dtmf(digits="12x", request_id="create-a")
+            await client.cancel()  # B's terminal
+            await asyncio.wait_for(second, timeout=2)
+
+    assert errors == [("dtmfDigitsInvalid", "create-a")]
+
+
+async def test_reconnect_leaves_the_dropped_call_behind():
+    # T8. A call cut off by a socket drop is over. After reconnecting, an error
+    # echoing the dropped call's createCall requestId does not end the new
+    # call's wait; the new call's own terminal event does.
+    errors = []
+    async with running(make_gateway(auto_complete=False, drop_after_user_turn=True)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            client.on(EventType.ERROR, lambda e: errors.append((e.code, e.request_id)))
+            await client.create_call(to="+821012345678", request_id="create-a")
+            with pytest.raises(ConnectionClosedError):
+                await asyncio.wait_for(client.wait_closed(), timeout=2)
+
+            await client.connect()
+            await client.create_call(to="+821012345678", request_id="create-c")
+            waiting = asyncio.create_task(client.wait_closed())
+            # Reusing the dropped call's createCall requestId on another
+            # command draws an error that echoes it.
+            await client.send_dtmf(digits="12x", request_id="create-a")
+            await client.cancel()
+            await asyncio.wait_for(waiting, timeout=2)
+
+    assert errors == [("dtmfDigitsInvalid", "create-a")]
+
+
+async def test_reconnect_from_disconnected_handler_leaves_the_new_connection_alone():
+    # A DISCONNECTED handler that reconnects runs while the dropped
+    # connection's receive loop is still finishing. The dropped call's wait
+    # still reports the drop, and that old loop must not mark the new
+    # connection closed: a call on it is waited on until its own terminal.
+    statuses = []
+    reconnected = asyncio.Event()
+    async with running(make_gateway(auto_complete=False, drop_after_user_turn=True)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            client.on(EventType.CALL_STATUS_CHANGED, lambda e: statuses.append(e.status))
+
+            @client.on(EventType.DISCONNECTED)
+            async def _(event):
+                if not reconnected.is_set():  # the final aclose() must not reconnect
+                    await client.connect()
+                    reconnected.set()
+
+            await client.create_call(to="+821012345678", request_id="create-a")
+            with pytest.raises(ConnectionClosedError):
+                await asyncio.wait_for(client.wait_closed(), timeout=2)
+            await asyncio.wait_for(reconnected.wait(), timeout=2)
+
+            await client.create_call(to="+821012345678", request_id="create-c")
+
+            async def statuses_when_the_wait_ends():
+                await client.wait_closed()
+                return list(statuses)
+
+            waiting = asyncio.create_task(statuses_when_the_wait_ends())
+            await client.cancel()
+            assert (await asyncio.wait_for(waiting, timeout=2))[-1] == "cancelled"
+
+
+@pytest.mark.parametrize("connect_first", [False, True], ids=["never-connected", "after-aclose"])
+async def test_create_call_that_cannot_be_sent_leaves_no_call_running(connect_first):
+    # T9. A createCall that never reaches the gateway starts no call: it
+    # raises, and the wait after it reports that same failure instead of
+    # hanging.
+    async with running(make_gateway()) as url:
+        client = TelloClient(api_key=RAW_KEY, url=url)
+        if connect_first:
+            await client.connect()
+            await client.aclose()
+        with pytest.raises(ConnectionClosedError) as sent:
+            await client.create_call(to="+821012345678")
+        with pytest.raises(ConnectionClosedError) as waited:
+            await asyncio.wait_for(client.wait_closed(), timeout=2)
+
+    assert waited.value is sent.value
 
 
 async def test_create_call_wire_frame_has_no_agent_id_key():

@@ -22,9 +22,15 @@ Design notes
   ``requestId``. :meth:`create_call` therefore always sends a ``requestId``
   (generated when omitted), and :meth:`wait_closed` raises the mapped
   exception only for an error echoing one of the current call's
-  ``create_call`` requestIds. Errors from other commands (``answer`` /
+  ``create_call`` requestIds. ``noActiveCall`` never ends the call, and
+  ``callAlreadyActive`` ends it only when it answers the ``create_call`` that
+  started it (contract §4.1). Errors from other commands (``answer`` /
   ``send_dtmf`` / ``get_summary`` / ``cancel``) leave the call running and
   only reach ``ERROR`` handlers.
+* Every call keeps its own outcome. A call ends (terminal frame, an error that
+  ends it, or the connection closing) before the frame reaches any handler, so
+  a wait started during a call reports that call even when a handler has
+  already started the next one.
 * The gateway drives a WS-level ping heartbeat; the ``websockets`` library
   answers pongs automatically, so no app-level heartbeat is needed here.
 * There is no reconnect/resume protocol (gateway does not support it).
@@ -67,11 +73,20 @@ logger = logging.getLogger("tello")
 _CLOSE_UNAUTHENTICATED = 4401
 _CLOSE_SESSION_REPLACED = 4429
 
-# Error codes that do NOT end the call wait even when they echo one of the
-# current call's create_call requestIds: noActiveCall is benign, and
-# callAlreadyActive means an existing call is still running and will produce
-# its own terminal event.
-_NON_ABORTING_ERROR_CODES = frozenset({"noActiveCall", "callAlreadyActive"})
+
+class _CallOutcome:
+    """How one call ended, shared by every :meth:`TelloClient.wait_closed` bound to it.
+
+    Each call gets its own instance, so a wait keeps reporting the call it was
+    started in after a handler has already started the next one.
+    """
+
+    __slots__ = ("ended", "error", "raised")
+
+    def __init__(self) -> None:
+        self.ended = asyncio.Event()
+        self.error: TelloError | None = None  # None: ended with a terminal event
+        self.raised = False  # some wait_closed() has already raised ``error``
 
 
 class TelloClient(EventEmitter):
@@ -108,13 +123,15 @@ class TelloClient(EventEmitter):
         self._config = config
         self._ws: Any = None
         self._recv_task: asyncio.Task[None] | None = None
-        self._call_done = asyncio.Event()  # current call reached a terminal state
-        self._closed = asyncio.Event()  # the WS connection has closed
+        self._conn_gen = 0  # bumped by connect(); an older receive loop leaves state alone
         self._close_exc: TelloError | None = None  # connection-level error to raise
-        self._call_error: TelloError | None = None  # call-level error to raise once
         self._active = False  # a call is in progress (awaiting its terminal event)
-        self._call_gen = 0  # bumped on each create_call to detect re-entrant calls
+        self._call_gen = 0  # bumped each time create_call starts a new call
         self._call_request_ids: set[str] = set()  # requestIds of the current call's create_calls
+        self._opening_request_id: str | None = None  # the create_call that started it
+        # The current call's outcome. Until a call starts on this connection it
+        # is the outcome the next call will reach, so an early wait follows it.
+        self._call_outcome = _CallOutcome()
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -126,10 +143,18 @@ class TelloClient(EventEmitter):
         raises :class:`~tello.errors.AuthenticationError` (or another
         :class:`~tello.errors.TelloError`) and the socket is closed.
         """
-        self._call_done.clear()
-        self._closed.clear()
+        # A new connection starts clean. The previous connection's receive loop
+        # is stale from here on, so a call it left active could never end: end
+        # it now rather than leave its waits hanging.
+        self._conn_gen += 1
+        gen = self._conn_gen
+        if self._active:
+            self._end_call(ConnectionClosedError("connection replaced before call terminated"))
+        self._call_request_ids.clear()
+        self._opening_request_id = None
+        if self._call_outcome.ended.is_set():
+            self._call_outcome = _CallOutcome()
         self._close_exc = None
-        self._call_error = None
         self._ws = await websockets.connect(
             self._config.url,
             open_timeout=self._config.open_timeout,
@@ -144,7 +169,7 @@ class TelloClient(EventEmitter):
             finally:
                 self._ws = None
             raise
-        self._recv_task = asyncio.create_task(self._recv_loop())
+        self._recv_task = asyncio.create_task(self._recv_loop(self._ws, gen))
         return self
 
     async def _authenticate(self) -> None:
@@ -207,25 +232,32 @@ class TelloClient(EventEmitter):
     async def wait_closed(self) -> None:
         """Wait until the current call ends or the connection closes.
 
-        Raises the connection error (auth / session-replaced / abnormal
-        mid-call disconnect), or the mapped error of an error frame answering
-        the current call's :meth:`create_call` (a refusal, or a failure after
-        ``call.created``). Errors from other commands do not end the call:
-        they only reach ``EventType.ERROR`` handlers and this keeps waiting.
+        A wait started during a call returns when that call ends, with that
+        call's outcome, even if a handler has already started the next call;
+        call this again to follow the next one. It raises the connection error
+        (auth / session-replaced / abnormal mid-call disconnect), or the mapped
+        error of the error frame that ended the call: one answering the call's
+        :meth:`create_call` (a refusal, or a failure after ``call.created``).
+        Errors from other commands do not end the call: they only reach
+        ``EventType.ERROR`` handlers and this keeps waiting.
+
+        Started with no call in progress, it returns at once with how the last
+        call ended (its error is raised only once) or, if no call has ended
+        since :meth:`connect`, waits for the next call to end or the connection
+        to close.
         """
-        call_done = asyncio.ensure_future(self._call_done.wait())
-        closed = asyncio.ensure_future(self._closed.wait())
-        try:
-            await asyncio.wait({call_done, closed}, return_when=asyncio.FIRST_COMPLETED)
-        finally:
-            call_done.cancel()
-            closed.cancel()
-        if self._close_exc is not None:
-            raise self._close_exc
-        if self._call_error is not None:
-            error = self._call_error
-            self._call_error = None
-            raise error
+        outcome = self._call_outcome
+        if outcome.ended.is_set():
+            if self._close_exc is not None:
+                raise self._close_exc
+            if outcome.error is not None and not outcome.raised:
+                outcome.raised = True
+                raise outcome.error
+            return
+        await outcome.ended.wait()
+        if outcome.error is not None:
+            outcome.raised = True
+            raise outcome.error
 
     # -- commands ----------------------------------------------------------
 
@@ -236,26 +268,42 @@ class TelloClient(EventEmitter):
         metadata: dict[str, Any] | None = None,
         request_id: str | None = None,
     ) -> None:
-        """Start a call. Resets terminal state so :meth:`wait_closed` tracks it.
+        """Start a call; :meth:`wait_closed` then follows it until it ends.
 
         The frame always carries a ``requestId``: ``request_id`` when non-empty,
         otherwise a generated UUID. The gateway echoes it on this command's
         error frame, which is how :meth:`wait_closed` tells an error that ends
         the call from one that answers another command.
+
+        During a live call the gateway refuses another ``create_call`` with
+        ``callAlreadyActive`` and the live call goes on, so the new id only
+        joins the live call. If the frame cannot be sent, the call it started
+        never began: it ends with the send error, which is raised here too.
         """
         if not request_id:
             request_id = str(uuid.uuid4())
-        if not self._active:
-            self._call_request_ids.clear()
-        # During an active call this create_call is refused with
-        # callAlreadyActive and the running call continues, so its id joins
-        # that call's set.
-        self._call_request_ids.add(request_id)
-        self._call_gen += 1
-        self._call_done.clear()
-        self._call_error = None
-        self._active = True
-        await self._send(create_call_frame(to, prompt, metadata, request_id))
+        # Encode before touching call state: a frame that cannot be serialized
+        # starts no call at all.
+        message = encode(create_call_frame(to, prompt, metadata, request_id))
+        starts_call = not self._active
+        if starts_call:
+            self._call_gen += 1
+            self._call_request_ids = {request_id}
+            self._opening_request_id = request_id
+            self._active = True
+            if self._call_outcome.ended.is_set():
+                self._call_outcome = _CallOutcome()
+        else:
+            self._call_request_ids.add(request_id)
+        gen = self._call_gen
+        try:
+            await self._send_encoded(message)
+        except TelloError as exc:
+            # The gateway never got this frame, so the call it started never
+            # began. Unless something else already ended that call, end it here.
+            if starts_call and self._active and gen == self._call_gen:
+                self._end_call(exc)
+            raise
 
     async def answer(
         self,
@@ -284,10 +332,13 @@ class TelloClient(EventEmitter):
         await self._send(get_summary_frame(call_id, request_id))
 
     async def _send(self, frame: dict[str, Any]) -> None:
+        await self._send_encoded(encode(frame))
+
+    async def _send_encoded(self, message: str) -> None:
         if self._ws is None:
             raise self._close_exc or ConnectionClosedError("client is not connected")
         try:
-            await self._ws.send(encode(frame))
+            await self._ws.send(message)
         except ConnectionClosed as exc:
             raise self._connection_error(exc) from exc
 
@@ -309,9 +360,12 @@ class TelloClient(EventEmitter):
 
     # -- receive loop ------------------------------------------------------
 
-    async def _recv_loop(self) -> None:
+    async def _recv_loop(self, ws: Any, gen: int) -> None:
+        close: ConnectionClosed | None = None
         try:
-            async for raw in self._ws:
+            async for raw in ws:
+                if gen != self._conn_gen:
+                    continue  # connect() has replaced this socket: nothing it says is current
                 try:
                     frame = json.loads(raw)
                 except (ValueError, TypeError):
@@ -322,40 +376,61 @@ class TelloClient(EventEmitter):
                     continue
                 await self._dispatch(frame)
         except ConnectionClosed as exc:
-            self._note_close(exc)
+            close = exc
         finally:
-            await self._finish()
+            await self._finish(gen, close)
 
     async def _dispatch(self, frame: dict[str, Any]) -> None:
         event = parse_event(frame)
 
+        # A frame that ends the call ends it before any handler sees the frame:
+        # waits on that call are released with its outcome, and a handler that
+        # calls create_call() starts a new call instead of joining this one.
         if isinstance(event, ErrorEvent):
             exc = exception_for(event.code, event.message, event.question)
             if event.code == "unauthenticated":
                 self._close_exc = exc
-            elif (
-                self._active
-                and event.request_id in self._call_request_ids
-                and event.code not in _NON_ABORTING_ERROR_CODES
-            ):
-                # The error answers this call's create_call: a refusal before
-                # call.created or a stream failure after it. Either way the call
-                # is over and no terminal frame follows, so unblock wait_closed()
-                # with the mapped error instead of hanging. Errors from other
-                # commands leave the call running and only reach ERROR handlers.
-                self._call_error = exc
-                self._active = False
-                self._call_done.set()
+            elif self._error_ends_call(event):
+                self._end_call(exc)
             await self._safe_emit(EventType.ERROR, event)
             return
 
-        # Snapshot the call generation: if a terminal handler starts a follow-up
-        # call, _call_gen advances and we must not re-set _call_done for it.
-        gen = self._call_gen
+        if isinstance(event, Event) and is_terminal(event):
+            self._end_call(None)
         await self._safe_emit(event.type, event)
-        if isinstance(event, Event) and is_terminal(event) and self._call_gen == gen:
-            self._active = False
-            self._call_done.set()
+
+    def _error_ends_call(self, event: ErrorEvent) -> bool:
+        """Whether an error frame ends the current call.
+
+        Only the call's own create_call can fail it: refused before
+        call.created, or its stream failing after it. The gateway then sends
+        that one error, echoing the create_call's requestId, and no terminal
+        event; errors from other commands leave the call running. noActiveCall
+        never ends a call. callAlreadyActive ends it only when it answers the
+        create_call that started it: the gateway is still finishing the previous
+        call (contract §4.1), so this one never started and can be retried.
+        Answering a create_call sent during the live call, it leaves that call
+        running.
+        """
+        if not self._active or event.request_id not in self._call_request_ids:
+            return False
+        if event.code == "noActiveCall":
+            return False
+        if event.code == "callAlreadyActive":
+            return event.request_id == self._opening_request_id
+        return True
+
+    def _end_call(self, error: TelloError | None) -> None:
+        """End the current call with ``error`` (``None``: a terminal event).
+
+        Every wait bound to the call returns with that outcome, and the next
+        create_call starts a new call.
+        """
+        self._active = False
+        outcome = self._call_outcome
+        if not outcome.ended.is_set():
+            outcome.error = error
+            outcome.ended.set()
 
     async def _safe_emit(self, event_type: str, event: Any) -> None:
         try:
@@ -374,15 +449,24 @@ class TelloClient(EventEmitter):
         elif code == _CLOSE_SESSION_REPLACED:
             self._close_exc = SessionReplacedError(reason or "session replaced")
 
-    async def _finish(self) -> None:
+    async def _finish(self, gen: int, close: ConnectionClosed | None) -> None:
+        if gen != self._conn_gen:
+            # connect() replaced this connection before its close came in: the
+            # close is about a socket the client no longer uses.
+            return
+        if close is not None:
+            self._note_close(close)
         # A close (clean or abnormal) while a call is still active means the call
         # never reached a terminal event: surface it rather than letting
         # wait_closed() report a phantom success.
-        if self._active and self._close_exc is None and self._call_error is None:
+        if self._active and self._close_exc is None:
             self._close_exc = ConnectionClosedError("connection closed before call terminated")
-        # Surface disconnect to subscribers as a typed Event, then unblock any
-        # waiter. session_id/call_id/timestamp are empty: this is an SDK-local
-        # pseudo-event.
+        # End the call, or release waits for the next one, before DISCONNECTED
+        # handlers run. A handler may reconnect, so nothing after the emit may
+        # touch client state.
+        self._end_call(self._close_exc)
+        # Surface disconnect to subscribers as a typed Event. session_id/call_id/
+        # timestamp are empty: this is an SDK-local pseudo-event.
         await self._safe_emit(
             EventType.DISCONNECTED,
             Event(
@@ -394,5 +478,3 @@ class TelloClient(EventEmitter):
                 raw={},
             ),
         )
-        self._closed.set()
-        self._call_done.set()

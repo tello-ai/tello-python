@@ -16,6 +16,33 @@
   those other commands are delivered only to `EventType.ERROR` handlers.
 - `create_call` always sends a `requestId`: `request_id` when non-empty,
   otherwise a generated UUID. The signature is unchanged.
+- A `callAlreadyActive` answering the `create_call` that started the call now
+  ends `wait_closed()` with `CallAlreadyActiveError`. Right after a call ends,
+  the gateway holds the session until it has cleaned that call up (contract
+  §4.1), so a `create_call` sent in that window is refused and never gets
+  `call.created`; `wait_closed()` used to ignore that refusal and hang. Retry
+  the call shortly. A `callAlreadyActive` answering a `create_call` sent
+  during a live call is still only an event, and `noActiveCall` never ends
+  the wait.
+- A `create_call` whose frame cannot be sent (the client is not connected, or
+  the socket has already closed) no longer leaves the client treating a call
+  as running. It raises as before, the next `wait_closed()` raises the same
+  error instead of hanging, and the next `create_call` starts a new call.
+- A call cut off by a dropped connection no longer carries over into the next
+  connection: after `connect()`, an error echoing the dropped call's
+  `create_call` requestId no longer ends the new call's wait.
+- Reconnecting from a `DISCONNECTED` handler works. The dropped connection's
+  receive loop marked the new connection closed once the handler returned,
+  so `wait_closed()` returned at once while the new call was still live, and
+  the dropped call's wait returned instead of raising `ConnectionClosedError`.
+
+### Changed (call wait)
+
+- **Behavior change**: a `wait_closed()` started during a call returns when
+  that call ends, with that call's outcome, even if a handler has already
+  started the next call. It used to keep waiting through a follow-up call
+  started from a terminal handler. Call `wait_closed()` again to wait for the
+  follow-up.
 
 ### Breaking changes (PyPI distribution name)
 
