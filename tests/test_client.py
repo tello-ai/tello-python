@@ -801,6 +801,23 @@ async def test_env_var_config(monkeypatch):
     assert completed == ["call-1"]
 
 
+async def test_default_url_is_production_gateway(monkeypatch):
+    # Neither url= nor TELLO_URL: the client dials the production gateway.
+    # The dial is refused here, so the test never reaches the network.
+    monkeypatch.delenv("TELLO_URL", raising=False)
+    dialed = []
+
+    async def refuse(url, **kwargs):
+        dialed.append(url)
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(websockets, "connect", refuse)
+    client = TelloClient(api_key=RAW_KEY)
+    with pytest.raises(OSError):
+        await client.connect()
+    assert dialed == ["wss://api.telloai.io/sdk"]
+
+
 def test_missing_api_key_raises(monkeypatch):
     monkeypatch.delenv("TELLO_API_KEY", raising=False)
     with pytest.raises(ValueError):

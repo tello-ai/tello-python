@@ -94,7 +94,7 @@ class TelloClient(EventEmitter):
 
     Use as an async context manager::
 
-        async with TelloClient(api_key="tello_live_xxx", url="ws://host/sdk") as client:
+        async with TelloClient(api_key="tello_live_xxx", url="wss://api.telloai.io/sdk") as client:
             @client.on(EventType.USER_TURN)
             async def _(event):
                 await client.answer(text="...")

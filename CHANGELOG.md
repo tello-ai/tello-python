@@ -1,6 +1,16 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.1 (unreleased)
+
+### Changed
+
+- **Behavior change**: the default URL is now `wss://api.telloai.io/sdk`, the
+  production gateway (was `ws://localhost:3000/sdk`). The old default, also
+  used by the README examples, pointed at a local development gateway, so a
+  client that relied on it or followed the README could not connect. Pass
+  `url=` or set `TELLO_URL` to reach another gateway.
+
+## 0.1.0 (2026-09-30)
 
 ### Fixed
 

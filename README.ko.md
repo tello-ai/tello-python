@@ -31,7 +31,7 @@ pip install tello-ai-sdk     # Python 3.10 이상 필요. import 이름은 `tell
 
 ```bash
 export TELLO_API_KEY="tello_live_xxx"
-export TELLO_URL="ws://localhost:3000/sdk"   # 선택. 기본값 ws://localhost:3000/sdk
+export TELLO_URL="wss://api.telloai.io/sdk"   # 선택. 기본값 wss://api.telloai.io/sdk
 ```
 
 인자 없이 `TelloClient()`를 호출하면 `TELLO_API_KEY` / `TELLO_URL`을 읽습니다.
@@ -43,7 +43,7 @@ import asyncio
 from tello import TelloClient, EventType
 
 async def main():
-    async with TelloClient(api_key="tello_live_xxx", url="ws://localhost:3000/sdk") as client:
+    async with TelloClient(api_key="tello_live_xxx", url="wss://api.telloai.io/sdk") as client:
         @client.on(EventType.USER_TURN)
         async def on_user_turn(event):
             await client.answer(text="확인했습니다. 계속 말씀해주세요.")
@@ -58,7 +58,7 @@ asyncio.run(main())
 `connect()` / `aclose()`를 묶어 준 것뿐이니, 원하면 직접 호출해도 됩니다:
 
 ```python
-client = TelloClient(api_key="tello_live_xxx", url="ws://localhost:3000/sdk")
+client = TelloClient(api_key="tello_live_xxx", url="wss://api.telloai.io/sdk")
 await client.connect()
 client.on(EventType.USER_TURN, on_user_turn)
 await client.create_call(to="+821012345678", prompt="예약 확인")

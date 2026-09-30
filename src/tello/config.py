@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-DEFAULT_URL = "ws://localhost:3000/sdk"
+DEFAULT_URL = "wss://api.telloai.io/sdk"
 
 #: Environment variables read when ``api_key`` / ``url`` are not passed explicitly.
 ENV_API_KEY = "TELLO_API_KEY"

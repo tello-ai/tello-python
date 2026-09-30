@@ -4,7 +4,7 @@
     from tello import TelloClient, EventType
 
     async def main():
-        async with TelloClient(api_key="tello_live_xxx", url="ws://localhost:3000/sdk") as client:
+        async with TelloClient(api_key="tello_live_xxx", url="wss://api.telloai.io/sdk") as client:
             @client.on(EventType.USER_TURN)
             async def on_user_turn(event):
                 await client.answer(text="확인했습니다.")

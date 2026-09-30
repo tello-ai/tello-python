@@ -32,7 +32,7 @@ Pass it explicitly or via environment variables:
 
 ```bash
 export TELLO_API_KEY="tello_live_xxx"
-export TELLO_URL="ws://localhost:3000/sdk"   # optional; defaults to ws://localhost:3000/sdk
+export TELLO_URL="wss://api.telloai.io/sdk"   # optional; defaults to wss://api.telloai.io/sdk
 ```
 
 `TelloClient()` with no arguments then reads `TELLO_API_KEY` / `TELLO_URL`.
@@ -44,7 +44,7 @@ import asyncio
 from tello import TelloClient, EventType
 
 async def main():
-    async with TelloClient(api_key="tello_live_xxx", url="ws://localhost:3000/sdk") as client:
+    async with TelloClient(api_key="tello_live_xxx", url="wss://api.telloai.io/sdk") as client:
         @client.on(EventType.USER_TURN)
         async def on_user_turn(event):
             await client.answer(text="확인했습니다. 계속 말씀해주세요.")
@@ -59,7 +59,7 @@ asyncio.run(main())
 form is sugar for `connect()` / `aclose()`; use them explicitly if you prefer:
 
 ```python
-client = TelloClient(api_key="tello_live_xxx", url="ws://localhost:3000/sdk")
+client = TelloClient(api_key="tello_live_xxx", url="wss://api.telloai.io/sdk")
 await client.connect()
 client.on(EventType.USER_TURN, on_user_turn)
 await client.create_call(to="+821012345678", prompt="예약 확인")
