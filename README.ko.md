@@ -92,15 +92,21 @@ await client.aclose()
 이벤트도 구독자에게 그대로 전달됩니다.
 
 명령: `await client.create_call(to, prompt="", metadata=None, request_id=None)`,
-`await client.answer(text, message_id=None)`,
-`await client.send_dtmf(digits, message_id=None)`, `await client.cancel()`,
+`await client.answer(text, message_id=None, request_id=None)`,
+`await client.send_dtmf(digits, message_id=None, request_id=None)`, `await client.cancel()`,
 `await client.get_summary(call_id, request_id=None)`. `create_call`은 항상
 `requestId`를 보냅니다. 직접 넘긴 값을 쓰고, 생략하면 UUID를 생성해 씁니다.
+명령마다 `request_id`를 따로 주거나 생략하세요(§5 참고).
 
 `await client.wait_closed()`는 통화가 종료 상태(`call.completed` /
-`call.noAnswer` / `call.failed`, 또는 cancelled 상태)에 이르거나 연결이 닫히면
-resolve 됩니다. 통화의 `create_call`이 실패하면 대신 오류를 raise 합니다(§5
-참고). 다른 명령의 오류로는 대기가 끝나지 않습니다.
+`call.noAnswer` / `call.failed`, 또는 status가 `cancelled`인
+`call.statusChanged`)에 이르거나 연결이 닫히면 resolve 됩니다. `cancel()`을
+보내면 게이트웨이는 그 cancelled `call.statusChanged`로 통화를 끝냅니다
+(`previous_status`는 취소 직전 상태). 뒤따르는 `call.completed`는 없습니다.
+진행 중인 대기는 핸들러가 이미 다음 통화를 시작했더라도 자기 통화가 끝나면
+반환됩니다. 다음 통화를 기다리려면 `wait_closed()`를 다시 호출하세요. 통화의
+`create_call`이 실패하면 대신 오류를 raise 합니다(§5 참고). 다른 명령의
+오류로는 대기가 끝나지 않습니다.
 
 ## 5. 오류 처리
 
@@ -146,13 +152,30 @@ resolve 됩니다. 통화의 `create_call`이 실패하면 대신 오류를 rais
 프레임에 그 값을 되돌려 주므로, SDK가 그 오류를 가려낼 수 있습니다. `answer`,
 `send_dtmf`, `get_summary`, `cancel`의 오류는 통화를 끝내지 않습니다.
 `EventType.ERROR` 이벤트로만 전달되고, `wait_closed()`는 통화의 종료 이벤트를
-계속 기다립니다. 실패한 `create_call`(예: `toRequired`, `callRejected`)이 멈춘
+계속 기다립니다. 그러니 명령마다 `request_id`를 따로 주거나 생략하세요.
+`create_call`의 requestId를 다른 명령에 다시 쓰면 그 명령의 오류가 대기를
+끝내 버립니다. 실패한 `create_call`(예: `toRequired`, `callRejected`)이 멈춘
 채 남지 않도록, `wait_closed()`가 그 오류를 다시 raise 합니다:
 
 - 인증 실패(`unauthenticated` 프레임, 4401 종료, `auth.ok` 타임아웃) → `connect()`가 `AuthenticationError` raise
-- `create_call` 오류(`call.created` 전의 거부, 또는 그 뒤의 실패) → 위 표의 대응 예외. `callAlreadyActive`는 대기를 끝내지 않습니다. 이미 진행 중인 통화가 계속됩니다
+- `create_call` 오류(`call.created` 전의 거부, 또는 그 뒤의 실패) → 위 표의 대응 예외
+- `callAlreadyActive` → `CallAlreadyActiveError`. 단, 통화를 시작한 `create_call`에 대한 응답일 때만입니다. 게이트웨이가 직전 통화를 아직 정리하는 중이라 이 통화는 시작되지 않았으니 잠시 뒤 다시 시도하세요. 통화 도중 보낸 `create_call`에 대한 응답이면 `EventType.ERROR` 이벤트일 뿐이고, 진행 중인 통화는 계속됩니다. `noActiveCall`로는 대기가 끝나지 않습니다
 - 통화 도중 연결 끊김 → `ConnectionClosedError`
 - 다른 연결에 세션을 빼앗김(4429 종료) → `SessionReplacedError`
+
+`EventType.ERROR` 핸들러가 받는 것은 예외가 아니라 `ErrorEvent`입니다. 위 표의
+타입별 예외로 바꾸려면 그 필드를 `tello.errors`의 `exception_for`에 넘기세요:
+
+```python
+from tello import CallRefusedError, EventType
+from tello.errors import exception_for
+
+@client.on(EventType.ERROR)
+def on_error(event):
+    error = exception_for(event.code, event.message, event.question)
+    if isinstance(error, CallRefusedError):
+        print(f"거부됨: {error.code}")
+```
 
 WS 수준 ping heartbeat는 게이트웨이가 주도하고, pong은 `websockets`가 알아서
 보냅니다. 재연결이나 세션 재개 프로토콜은 없습니다. 비정상 종료가 나면 재연결이

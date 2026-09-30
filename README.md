@@ -92,15 +92,21 @@ use camelCase keys (`sessionId`, `callId`, `turnIndex`, `previousStatus`,
 so forward-compatible additions still reach subscribers.
 
 Commands: `await client.create_call(to, prompt="", metadata=None, request_id=None)`,
-`await client.answer(text, message_id=None)`,
-`await client.send_dtmf(digits, message_id=None)`, `await client.cancel()`,
+`await client.answer(text, message_id=None, request_id=None)`,
+`await client.send_dtmf(digits, message_id=None, request_id=None)`, `await client.cancel()`,
 `await client.get_summary(call_id, request_id=None)`. `create_call` always sends
-a `requestId`: the one you pass, or a generated UUID when you omit it.
+a `requestId`: the one you pass, or a generated UUID when you omit it. Give each
+command its own `request_id`, or omit it (see §5).
 
 `await client.wait_closed()` resolves when the call reaches a terminal state
-(`call.completed` / `call.noAnswer` / `call.failed`, or a cancelled status) or
-the connection closes. It raises instead when the call's `create_call` fails
-(see §5); an error from any other command does not end the wait.
+(`call.completed` / `call.noAnswer` / `call.failed`, or a `call.statusChanged`
+with status `cancelled`) or the connection closes. After `cancel()`, the gateway
+ends the call with that cancelled `call.statusChanged` (its `previous_status` is
+the status before the cancel); no `call.completed` follows. A wait in progress
+returns when its own call ends, even if a handler has already started a
+follow-up call; call `wait_closed()` again to wait for the follow-up. It raises
+instead when the call's `create_call` fails (see §5); an error from any other
+command does not end the wait.
 
 ## 5. Error handling
 
@@ -144,14 +150,32 @@ the call: `create_call` always sends a `requestId` (generated when you omit it)
 and the gateway echoes it on the error frame, which is how the SDK tells that
 error apart. Errors from `answer`, `send_dtmf`, `get_summary`, and `cancel` do
 not end the call; they are delivered only as `EventType.ERROR` events, and
-`wait_closed()` keeps waiting for the call's terminal event. `wait_closed()`
-re-raises the relevant error so a failed `create_call` (e.g. `toRequired`,
-`callRejected`) does not hang:
+`wait_closed()` keeps waiting for the call's terminal event. So give each
+command its own `request_id`, or omit it: never reuse the `create_call`
+requestId on another command, because an error answering that command would
+then end the wait. `wait_closed()` re-raises the relevant error so a failed
+`create_call` (e.g. `toRequired`, `callRejected`) does not hang:
 
 - auth failure (`unauthenticated` frame, close 4401, or `auth.ok` timeout) → `AuthenticationError`, raised from `connect()`
-- a `create_call` error (a refusal before `call.created`, or a failure after it) → its mapped exception above. `callAlreadyActive` does not end the wait: the call already in progress continues
+- a `create_call` error (a refusal before `call.created`, or a failure after it) → its mapped exception above
+- `callAlreadyActive` → `CallAlreadyActiveError`, but only when it answers the `create_call` that started the call: the gateway is still finishing the previous call, so this one never started. Retry shortly. Answering a `create_call` sent during a live call, it is only an `EventType.ERROR` event and the live call continues. `noActiveCall` never ends the wait
 - the connection dropping mid-call → `ConnectionClosedError`
 - the session being displaced (close 4429) → `SessionReplacedError`
+
+An `EventType.ERROR` handler receives an `ErrorEvent`, not an exception. To turn
+it into the typed exception from the tables above, pass its fields to
+`exception_for` from `tello.errors`:
+
+```python
+from tello import CallRefusedError, EventType
+from tello.errors import exception_for
+
+@client.on(EventType.ERROR)
+def on_error(event):
+    error = exception_for(event.code, event.message, event.question)
+    if isinstance(error, CallRefusedError):
+        print(f"refused: {error.code}")
+```
 
 The gateway drives a WS-level ping heartbeat; `websockets` answers pongs
 automatically. There is no reconnect/resume — treat an abnormal close as
