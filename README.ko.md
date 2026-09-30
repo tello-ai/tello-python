@@ -91,14 +91,16 @@ await client.aclose()
 `requestId`). 모르는 `type`은 기본 `Event`로 떨어지므로, 앞으로 추가되는
 이벤트도 구독자에게 그대로 전달됩니다.
 
-명령: `await client.create_call(to, prompt="", metadata=None)`,
+명령: `await client.create_call(to, prompt="", metadata=None, request_id=None)`,
 `await client.answer(text, message_id=None)`,
 `await client.send_dtmf(digits, message_id=None)`, `await client.cancel()`,
-`await client.get_summary(call_id, request_id=None)`.
+`await client.get_summary(call_id, request_id=None)`. `create_call`은 항상
+`requestId`를 보냅니다. 직접 넘긴 값을 쓰고, 생략하면 UUID를 생성해 씁니다.
 
 `await client.wait_closed()`는 통화가 종료 상태(`call.completed` /
 `call.noAnswer` / `call.failed`, 또는 cancelled 상태)에 이르거나 연결이 닫히면
-resolve 됩니다.
+resolve 됩니다. 통화의 `create_call`이 실패하면 대신 오류를 raise 합니다(§5
+참고). 다른 명령의 오류로는 대기가 끝나지 않습니다.
 
 ## 5. 오류 처리
 
@@ -139,11 +141,16 @@ resolve 됩니다.
 | `callSetupFailed` | `CallProviderError` | 실패로 보고합니다 |
 
 명령 단위 오류는 소켓을 닫지 않고 `EventType.ERROR` 구독자에게도 전달됩니다.
-실패한 `create_call`(예: `toRequired`, `callRejected`)이 멈춘 채 남지 않도록,
-`wait_closed()`가 그 오류를 다시 raise 합니다:
+통화를 끝내는 오류는 그 통화의 `create_call`에 대한 오류뿐입니다.
+`create_call`은 항상 `requestId`를 보내고(생략하면 생성) 게이트웨이가 오류
+프레임에 그 값을 되돌려 주므로, SDK가 그 오류를 가려낼 수 있습니다. `answer`,
+`send_dtmf`, `get_summary`, `cancel`의 오류는 통화를 끝내지 않습니다.
+`EventType.ERROR` 이벤트로만 전달되고, `wait_closed()`는 통화의 종료 이벤트를
+계속 기다립니다. 실패한 `create_call`(예: `toRequired`, `callRejected`)이 멈춘
+채 남지 않도록, `wait_closed()`가 그 오류를 다시 raise 합니다:
 
 - 인증 실패(`unauthenticated` 프레임, 4401 종료, `auth.ok` 타임아웃) → `connect()`가 `AuthenticationError` raise
-- 통화 시작 거부 → 위 표의 대응 예외
+- `create_call` 오류(`call.created` 전의 거부, 또는 그 뒤의 실패) → 위 표의 대응 예외. `callAlreadyActive`는 대기를 끝내지 않습니다. 이미 진행 중인 통화가 계속됩니다
 - 통화 도중 연결 끊김 → `ConnectionClosedError`
 - 다른 연결에 세션을 빼앗김(4429 종료) → `SessionReplacedError`
 

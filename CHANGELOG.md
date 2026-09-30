@@ -2,6 +2,21 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed
+
+- `wait_closed()` no longer ends on an error from a command other than
+  `create_call`. It used to raise on any error frame that arrived while a call
+  was active, so a mid-call `dtmfDigitsInvalid` raised `ValidationError` while
+  the call was still live, and a caller that then closed the socket made the
+  gateway cancel the real call. The wire contract (§6) keeps the connection
+  open on a failed command, and a failed `answer` / `send_dtmf` /
+  `get_summary` / `cancel` leaves the call running, so `wait_closed()` now
+  raises only for an error echoing the `requestId` of the current call's
+  `create_call`: a refusal, or a failure after `call.created`. Errors from
+  those other commands are delivered only to `EventType.ERROR` handlers.
+- `create_call` always sends a `requestId`: `request_id` when non-empty,
+  otherwise a generated UUID. The signature is unchanged.
+
 ### Breaking changes (PyPI distribution name)
 
 - **Breaking**: the distribution is published as `tello-ai-sdk`. `tello-sdk` on PyPI belongs to an unrelated Tello EDU drone library, so `pip install tello-sdk` never installed this SDK. The import name stays `tello`.

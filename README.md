@@ -91,14 +91,16 @@ use camelCase keys (`sessionId`, `callId`, `turnIndex`, `previousStatus`,
 `failureReason`, `requestId`). An unknown `type` falls back to the base `Event`
 so forward-compatible additions still reach subscribers.
 
-Commands: `await client.create_call(to, prompt="", metadata=None)`,
+Commands: `await client.create_call(to, prompt="", metadata=None, request_id=None)`,
 `await client.answer(text, message_id=None)`,
 `await client.send_dtmf(digits, message_id=None)`, `await client.cancel()`,
-`await client.get_summary(call_id, request_id=None)`.
+`await client.get_summary(call_id, request_id=None)`. `create_call` always sends
+a `requestId`: the one you pass, or a generated UUID when you omit it.
 
 `await client.wait_closed()` resolves when the call reaches a terminal state
 (`call.completed` / `call.noAnswer` / `call.failed`, or a cancelled status) or
-the connection closes.
+the connection closes. It raises instead when the call's `create_call` fails
+(see §5); an error from any other command does not end the wait.
 
 ## 5. Error handling
 
@@ -137,11 +139,17 @@ Every error carries the gateway code on `.code` — branch on that, never on
 | `callSetupFailed` | `CallProviderError` | surface as a failure and report it |
 
 Command-level errors are also delivered to `EventType.ERROR` subscribers without
-closing the socket. `wait_closed()` re-raises the relevant error so a failed
-`create_call` (e.g. `toRequired`, `callRejected`) does not hang:
+closing the socket. Only an error answering the call's own `create_call` ends
+the call: `create_call` always sends a `requestId` (generated when you omit it)
+and the gateway echoes it on the error frame, which is how the SDK tells that
+error apart. Errors from `answer`, `send_dtmf`, `get_summary`, and `cancel` do
+not end the call; they are delivered only as `EventType.ERROR` events, and
+`wait_closed()` keeps waiting for the call's terminal event. `wait_closed()`
+re-raises the relevant error so a failed `create_call` (e.g. `toRequired`,
+`callRejected`) does not hang:
 
 - auth failure (`unauthenticated` frame, close 4401, or `auth.ok` timeout) → `AuthenticationError`, raised from `connect()`
-- a call-start rejection → its mapped exception above
+- a `create_call` error (a refusal before `call.created`, or a failure after it) → its mapped exception above. `callAlreadyActive` does not end the wait: the call already in progress continues
 - the connection dropping mid-call → `ConnectionClosedError`
 - the session being displaced (close 4429) → `SessionReplacedError`
 

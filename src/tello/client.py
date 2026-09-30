@@ -15,10 +15,16 @@ Design notes
   for ``auth.ok`` all fail :meth:`connect` with
   :class:`~tello.errors.AuthenticationError`. This handshake is internal: no
   business command can run until :meth:`connect` has succeeded.
-* The gateway keeps the socket **open** on command errors (it never sends a
-  terminal frame for a rejected ``create_call``). :meth:`wait_closed` therefore
-  resolves on a call-start rejection too, raising the mapped exception, so a
-  failed ``create_call`` does not hang the caller.
+* The gateway keeps the socket **open** on command errors (contract §6). Only
+  the call's own ``create_call`` can fail in a way that ends the call (refused
+  before ``call.created``, or its stream failing after it), and then the
+  gateway sends no terminal frame, just an error echoing that command's
+  ``requestId``. :meth:`create_call` therefore always sends a ``requestId``
+  (generated when omitted), and :meth:`wait_closed` raises the mapped
+  exception only for an error echoing one of the current call's
+  ``create_call`` requestIds. Errors from other commands (``answer`` /
+  ``send_dtmf`` / ``get_summary`` / ``cancel``) leave the call running and
+  only reach ``ERROR`` handlers.
 * The gateway drives a WS-level ping heartbeat; the ``websockets`` library
   answers pongs automatically, so no app-level heartbeat is needed here.
 * There is no reconnect/resume protocol (gateway does not support it).
@@ -30,6 +36,7 @@ import asyncio
 import json
 import logging
 import os
+import uuid
 from typing import Any
 
 import websockets
@@ -60,9 +67,10 @@ logger = logging.getLogger("tello")
 _CLOSE_UNAUTHENTICATED = 4401
 _CLOSE_SESSION_REPLACED = 4429
 
-# Error codes that do NOT abort a pending create_call wait: noActiveCall is
-# benign, and callAlreadyActive means an existing call is still running and
-# will produce its own terminal event.
+# Error codes that do NOT end the call wait even when they echo one of the
+# current call's create_call requestIds: noActiveCall is benign, and
+# callAlreadyActive means an existing call is still running and will produce
+# its own terminal event.
 _NON_ABORTING_ERROR_CODES = frozenset({"noActiveCall", "callAlreadyActive"})
 
 
@@ -106,6 +114,7 @@ class TelloClient(EventEmitter):
         self._call_error: TelloError | None = None  # call-level error to raise once
         self._active = False  # a call is in progress (awaiting its terminal event)
         self._call_gen = 0  # bumped on each create_call to detect re-entrant calls
+        self._call_request_ids: set[str] = set()  # requestIds of the current call's create_calls
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -199,7 +208,10 @@ class TelloClient(EventEmitter):
         """Wait until the current call ends or the connection closes.
 
         Raises the connection error (auth / session-replaced / abnormal
-        mid-call disconnect) or a call-start rejection error if one occurred.
+        mid-call disconnect), or the mapped error of an error frame answering
+        the current call's :meth:`create_call` (a refusal, or a failure after
+        ``call.created``). Errors from other commands do not end the call:
+        they only reach ``EventType.ERROR`` handlers and this keeps waiting.
         """
         call_done = asyncio.ensure_future(self._call_done.wait())
         closed = asyncio.ensure_future(self._closed.wait())
@@ -224,7 +236,21 @@ class TelloClient(EventEmitter):
         metadata: dict[str, Any] | None = None,
         request_id: str | None = None,
     ) -> None:
-        """Start a call. Resets terminal state so :meth:`wait_closed` tracks it."""
+        """Start a call. Resets terminal state so :meth:`wait_closed` tracks it.
+
+        The frame always carries a ``requestId``: ``request_id`` when non-empty,
+        otherwise a generated UUID. The gateway echoes it on this command's
+        error frame, which is how :meth:`wait_closed` tells an error that ends
+        the call from one that answers another command.
+        """
+        if not request_id:
+            request_id = str(uuid.uuid4())
+        if not self._active:
+            self._call_request_ids.clear()
+        # During an active call this create_call is refused with
+        # callAlreadyActive and the running call continues, so its id joins
+        # that call's set.
+        self._call_request_ids.add(request_id)
         self._call_gen += 1
         self._call_done.clear()
         self._call_error = None
@@ -307,9 +333,16 @@ class TelloClient(EventEmitter):
             exc = exception_for(event.code, event.message, event.question)
             if event.code == "unauthenticated":
                 self._close_exc = exc
-            elif event.code not in _NON_ABORTING_ERROR_CODES and self._active:
-                # The gateway sends no terminal frame for a rejected command, so
-                # unblock wait_closed() with the mapped error instead of hanging.
+            elif (
+                self._active
+                and event.request_id in self._call_request_ids
+                and event.code not in _NON_ABORTING_ERROR_CODES
+            ):
+                # The error answers this call's create_call: a refusal before
+                # call.created or a stream failure after it. Either way the call
+                # is over and no terminal frame follows, so unblock wait_closed()
+                # with the mapped error instead of hanging. Errors from other
+                # commands leave the call running and only reach ERROR handlers.
                 self._call_error = exc
                 self._active = False
                 self._call_done.set()

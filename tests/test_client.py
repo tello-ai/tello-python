@@ -16,15 +16,18 @@ from websockets.exceptions import ConnectionClosed
 
 from tello import (
     AuthenticationError,
+    CallRefusedError,
     ClientConfig,
     ConnectionClosedError,
     EventType,
     SessionReplacedError,
     TelloClient,
+    TelloServerError,
     ValidationError,
 )
 
 RAW_KEY = "sdk-secret"
+DTMF_KEYS = frozenset("0123456789*#")
 
 
 def _call_created():
@@ -134,6 +137,8 @@ def make_gateway(
     auth_close_only=False,
     received=None,
     upgrade_sink=None,
+    refuse_create=None,
+    stream_failure=None,
 ):
     async def handler(ws):
         if upgrade_sink is not None:
@@ -167,6 +172,17 @@ def make_gateway(
         await ws.send(_auth_ok(data.get("requestId")))
 
         active = False
+        stream_tasks = []
+
+        async def fail_stream(create_request_id):
+            # Like the real gateway when a call's stream fails after call.created:
+            # the call is cancelled and the only frame is an error echoing the
+            # createCall requestId, with no terminal event.
+            nonlocal active
+            await stream_failure.wait()
+            active = False
+            await ws.send(_error("internalError", "Internal error", create_request_id))
+
         async for raw in ws:
             if received is not None:
                 received.append(json.loads(raw))
@@ -175,9 +191,20 @@ def make_gateway(
             data = msg.get("data", {})
 
             if event == "createCall":
+                if active:
+                    # the running call continues untouched
+                    await ws.send(
+                        _error("callAlreadyActive", "A call is already active", data.get("requestId"))
+                    )
+                    continue
                 if not data.get("to"):
                     # rejected create: send error, keep socket open, no terminal
                     await ws.send(_error("toRequired", "to is required", data.get("requestId")))
+                    continue
+                if refuse_create is not None:
+                    # outbound-gate refusal: one error echoing the createCall
+                    # requestId, no call.created, socket stays open
+                    await ws.send(_error(refuse_create, "Call refused", data.get("requestId")))
                     continue
                 if close_4429:
                     await ws.close(4429, "session replaced")
@@ -194,6 +221,8 @@ def make_gateway(
                 if ping_on_create:
                     pong_waiter = await ws.ping()
                     await asyncio.wait_for(pong_waiter, timeout=1)
+                if stream_failure is not None:
+                    stream_tasks.append(asyncio.create_task(fail_stream(data.get("requestId"))))
                 if auto_complete:
                     await ws.send(_completed())
                     active = False
@@ -207,10 +236,16 @@ def make_gateway(
                 if not active:
                     await ws.send(_error("noActiveCall", "No active call", data.get("requestId")))
                     continue
+                if set(data.get("digits", "")) - DTMF_KEYS:
+                    message = "digits must contain only 0-9, *, #"
+                    await ws.send(_error("dtmfDigitsInvalid", message, data.get("requestId")))
+                    continue
                 await ws.send(_agent_turn(2, data.get("digits", "")))
             elif event == "cancel":
                 await ws.send(_completed())
                 active = False
+        for task in stream_tasks:  # socket closed: an unfired failure has no one to reach
+            task.cancel()
 
     return handler
 
@@ -409,6 +444,91 @@ async def test_rejected_create_missing_to_unblocks_wait_closed():
                 await asyncio.wait_for(client.wait_closed(), timeout=2)
 
 
+async def test_other_command_error_does_not_end_call_wait():
+    # Contract §6: a failed command does not end the call. A sendDtmf error
+    # (echoing its own requestId, or carrying none) only reaches ERROR handlers;
+    # wait_closed() keeps waiting for the call's terminal event.
+    errors = []
+    created = asyncio.Event()
+    both_failed = asyncio.Event()
+    async with running(make_gateway(auto_complete=False)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            client.on(EventType.CALL_CREATED, lambda e: created.set())
+
+            @client.on(EventType.ERROR)
+            def _(event):
+                errors.append((event.code, event.request_id))
+                if len(errors) == 2:
+                    both_failed.set()
+
+            await client.create_call(to="+821012345678")
+            waiting = asyncio.create_task(client.wait_closed())
+            await asyncio.wait_for(created.wait(), timeout=2)
+            await client.send_dtmf(digits="12x", request_id="dtmf-1")
+            await client.send_dtmf(digits="12x")  # no requestId on the command or its error
+            await asyncio.wait_for(both_failed.wait(), timeout=2)
+            await asyncio.sleep(0.05)
+            assert not waiting.done()  # the call is still live
+
+            await client.cancel()  # the fake gateway ends the call with call.completed
+            await asyncio.wait_for(waiting, timeout=2)
+
+    assert errors == [("dtmfDigitsInvalid", "dtmf-1"), ("dtmfDigitsInvalid", None)]
+
+
+async def test_create_call_refusal_ends_call_wait():
+    # An outbound-gate refusal is one error echoing the createCall requestId,
+    # with no call.created and no terminal event; wait_closed() raises it.
+    async with running(make_gateway(refuse_create="insufficientCredit")) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            await client.create_call(to="+821012345678", request_id="create-1")
+            with pytest.raises(CallRefusedError) as exc_info:
+                await asyncio.wait_for(client.wait_closed(), timeout=2)
+
+    assert exc_info.value.code == "insufficientCredit"
+
+
+async def test_create_call_failure_after_call_created_ends_call_wait():
+    # A stream failure after call.created ends the call with one error echoing
+    # the createCall requestId and no terminal event. The earlier sendDtmf
+    # error must not have ended the wait in its place.
+    stream_failure = asyncio.Event()
+    created = asyncio.Event()
+    dtmf_failed = asyncio.Event()
+    async with running(make_gateway(auto_complete=False, stream_failure=stream_failure)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            client.on(EventType.CALL_CREATED, lambda e: created.set())
+            client.on(EventType.ERROR, lambda e: dtmf_failed.set())
+            await client.create_call(to="+821012345678")
+            await asyncio.wait_for(created.wait(), timeout=2)
+            await client.send_dtmf(digits="12x", request_id="dtmf-1")
+            await asyncio.wait_for(dtmf_failed.wait(), timeout=2)
+
+            stream_failure.set()
+            with pytest.raises(TelloServerError) as exc_info:
+                await asyncio.wait_for(client.wait_closed(), timeout=2)
+
+    assert exc_info.value.code == "internalError"
+
+
+async def test_create_call_during_active_call_keeps_tracking_that_call():
+    # A second create_call during a live call is refused with callAlreadyActive
+    # and the original call continues, so a later failure of the original
+    # call's stream must still end the wait.
+    stream_failure = asyncio.Event()
+    refused = asyncio.Event()
+    async with running(make_gateway(auto_complete=False, stream_failure=stream_failure)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            client.on(EventType.ERROR, lambda e: refused.set())
+            await client.create_call(to="+821012345678")
+            await client.create_call(to="+821012345678")
+            await asyncio.wait_for(refused.wait(), timeout=2)
+
+            stream_failure.set()
+            with pytest.raises(TelloServerError):
+                await asyncio.wait_for(client.wait_closed(), timeout=2)
+
+
 async def test_create_call_wire_frame_has_no_agent_id_key():
     # Contract: the createCall data payload must never contain an agentId key.
     received = []
@@ -432,6 +552,23 @@ async def test_create_call_wire_frame_has_no_agent_id_key():
         "metadata": {"src": "test"},
         "requestId": "r1",
     }
+
+
+@pytest.mark.parametrize("caller_request_id", [None, "", "caller-req-1"])
+async def test_create_call_always_sends_request_id(caller_request_id):
+    # The gateway echoes a command's requestId on its error frame, so every
+    # createCall carries one: the caller's when non-empty, else a generated id.
+    received = []
+    async with running(make_gateway(auto_complete=True, received=received)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            await client.create_call(to="+821012345678", request_id=caller_request_id)
+            await client.wait_closed()
+
+    [create_frame] = [m for m in received if m.get("event") == "createCall"]
+    sent = create_frame["data"].get("requestId")
+    assert isinstance(sent, str) and sent
+    if caller_request_id:
+        assert sent == caller_request_id
 
 
 async def test_abnormal_disconnect_raises():
