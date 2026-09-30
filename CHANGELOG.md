@@ -49,6 +49,13 @@
 - Requires `websockets>=14` (was `>=13`). The test suite runs on the asyncio
   implementation that `websockets` 14 made the default, so 13 was declared
   but never tested.
+- The package metadata declares the license as a PEP 639 expression
+  (`License-Expression: Apache-2.0`, with `LICENSE` as the license file) and
+  lists trove classifiers for Python 3.10–3.13, `Typing :: Typed`,
+  `Framework :: AsyncIO`, and `Development Status :: 3 - Alpha`. Building
+  needs hatchling 1.27 or newer.
+- The README links on PyPI point at GitHub; as relative paths they were
+  broken on the project page.
 
 ### Breaking changes (PyPI distribution name)
 

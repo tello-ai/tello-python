@@ -1,4 +1,4 @@
-**English** | [한국어](README.ko.md)
+**English** | [한국어](https://github.com/tello-ai/tello-python/blob/main/README.ko.md)
 
 # tello-ai-sdk (Python)
 
@@ -10,7 +10,7 @@ the gateway streams each caller turn from a live phone call, and your handler's
 reply is forwarded back into the call.
 
 > Transport is WebSocket only. There is no REST or webhook surface. The protocol
-> contract lives in [`docs/protocol/sdk-ws.v1.md`](docs/protocol/sdk-ws.v1.md).
+> contract lives in [`docs/protocol/sdk-ws.v1.md`](https://github.com/tello-ai/tello-python/blob/main/docs/protocol/sdk-ws.v1.md).
 
 ## 1. Install
 
@@ -105,7 +105,7 @@ the connection closes. It raises instead when the call's `create_call` fails
 ## 5. Error handling
 
 Gateway error frames map 1:1 to exceptions
-(see [`docs/errors/errors.v1.json`](docs/errors/errors.v1.json)):
+(see [`docs/errors/errors.v1.json`](https://github.com/tello-ai/tello-python/blob/main/docs/errors/errors.v1.json)):
 
 | gateway `code` | exception |
 | --- | --- |
@@ -159,7 +159,7 @@ reconnect-worthy and restart the call.
 
 ## 6. Examples
 
-Runnable programs live in [`examples/`](examples/README.md):
+Runnable programs live in [`examples/`](https://github.com/tello-ai/tello-python/blob/main/examples/README.md):
 
 ```bash
 uv run python examples/basic_call.py       # connect, one call, answer each turn
@@ -167,14 +167,14 @@ uv run python examples/agent_callback.py   # full lifecycle, history, cancel, ty
 uv run python examples/call_summary.py     # gated live scenario ending in call.summary
 ```
 
-They place real calls. Read [`examples/README.md`](examples/README.md) first.
+They place real calls. Read [`examples/README.md`](https://github.com/tello-ai/tello-python/blob/main/examples/README.md) first.
 
 ## 7. Version compatibility
 
 `tello-ai-sdk 0.1.x` implements Tello WS protocol `1.0`.
 
-The full frame contract is in [`docs/protocol/sdk-ws.v1.md`](docs/protocol/sdk-ws.v1.md),
-with [`docs/events/sdk-events.v1.schema.json`](docs/events/sdk-events.v1.schema.json)
-and [`docs/errors/errors.v1.json`](docs/errors/errors.v1.json). Those three files
+The full frame contract is in [`docs/protocol/sdk-ws.v1.md`](https://github.com/tello-ai/tello-python/blob/main/docs/protocol/sdk-ws.v1.md),
+with [`docs/events/sdk-events.v1.schema.json`](https://github.com/tello-ai/tello-python/blob/main/docs/events/sdk-events.v1.schema.json)
+and [`docs/errors/errors.v1.json`](https://github.com/tello-ai/tello-python/blob/main/docs/errors/errors.v1.json). Those three files
 are generated copies of the canonical contract that lives beside the gateway
 implementation — read them here, edit them there.
