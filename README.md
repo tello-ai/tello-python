@@ -1,8 +1,8 @@
 **English** | [한국어](README.ko.md)
 
-# tello-sdk (Python)
+# tello-ai-sdk (Python)
 
-> repo: `tello-python` · PyPI package: `tello-sdk` · import: `tello`
+> repo: `tello-python` · PyPI package: `tello-ai-sdk` · import: `tello`
 
 Tello SDK for Python — a thin **WebSocket** realtime client for the
 turn-provider-gateway `/sdk` endpoint. The SDK is the "conversation brain":
@@ -15,7 +15,7 @@ reply is forwarded back into the call.
 ## 1. Install
 
 ```bash
-pip install tello-sdk        # requires Python >= 3.10; imports as `tello`
+pip install tello-ai-sdk     # requires Python >= 3.10; imports as `tello`
 ```
 
 ## 2. API key
@@ -163,7 +163,7 @@ They place real calls. Read [`examples/README.md`](examples/README.md) first.
 
 ## 7. Version compatibility
 
-`tello-sdk 0.1.x` implements Tello WS protocol `1.0`.
+`tello-ai-sdk 0.1.x` implements Tello WS protocol `1.0`.
 
 The full frame contract is in [`docs/protocol/sdk-ws.v1.md`](docs/protocol/sdk-ws.v1.md),
 with [`docs/events/sdk-events.v1.schema.json`](docs/events/sdk-events.v1.schema.json)

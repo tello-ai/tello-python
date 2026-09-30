@@ -276,7 +276,7 @@ turn-provider-gateway → VGW
 #### 설치
 
 ```bash
-pip install tello-sdk
+pip install tello-ai-sdk
 ```
 
 #### 기본 사용 예시

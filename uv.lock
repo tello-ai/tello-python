@@ -101,7 +101,7 @@ wheels = [
 ]
 
 [[package]]
-name = "tello-sdk"
+name = "tello-ai-sdk"
 source = { editable = "." }
 dependencies = [
     { name = "websockets" },

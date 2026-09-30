@@ -1,8 +1,8 @@
 [English](README.md) | **한국어**
 
-# tello-sdk (Python)
+# tello-ai-sdk (Python)
 
-> 저장소: `tello-python` · PyPI 배포명: `tello-sdk` · import: `tello`
+> 저장소: `tello-python` · PyPI 배포명: `tello-ai-sdk` · import: `tello`
 
 Python용 Tello SDK. turn-provider-gateway `/sdk` 엔드포인트에 붙는 얇은
 **WebSocket** 실시간 클라이언트입니다. SDK가 대화의 두뇌를 맡습니다.
@@ -15,7 +15,7 @@ Python용 Tello SDK. turn-provider-gateway `/sdk` 엔드포인트에 붙는 얇�
 ## 1. 설치
 
 ```bash
-pip install tello-sdk        # Python 3.10 이상 필요. import 이름은 `tello`
+pip install tello-ai-sdk     # Python 3.10 이상 필요. import 이름은 `tello`
 ```
 
 ## 2. API 키
@@ -167,7 +167,7 @@ uv run python examples/call_summary.py     # 게이트로 막아 둔 라이브 �
 
 ## 7. 버전 호환성
 
-`tello-sdk 0.1.x`는 Tello WS 프로토콜 `1.0`을 구현합니다.
+`tello-ai-sdk 0.1.x`는 Tello WS 프로토콜 `1.0`을 구현합니다.
 
 프레임 계약 전문은 [`docs/protocol/sdk-ws.v1.md`](docs/protocol/sdk-ws.v1.md)에
 있고, [`docs/events/sdk-events.v1.schema.json`](docs/events/sdk-events.v1.schema.json)과

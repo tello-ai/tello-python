@@ -2,6 +2,11 @@
 
 ## 0.1.0 (unreleased)
 
+### Breaking changes (PyPI distribution name)
+
+- **Breaking**: the distribution is published as `tello-ai-sdk`. `tello-sdk` on PyPI belongs to an unrelated Tello EDU drone library, so `pip install tello-sdk` never installed this SDK. The import name stays `tello`.
+- License is Apache-2.0 (was MIT), matching tello-go and tello-js.
+
 ### Breaking changes (SMS removed from the SDK contract)
 
 - **Breaking**: `send_sms` was removed entirely (the `sendSms` command, the `sms.sent` event, and the `SmsSentEvent` / `EventType.SMS_SENT` symbols no longer exist). The gateway dropped the `sendSms` handler, so a client still sending the frame matches no handler, receives no response at all, and blocks until its own timeout.
