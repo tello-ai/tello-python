@@ -8,7 +8,7 @@ license = { text = "Apache-2.0" }
 authors = [{ name = "Tello" }]
 keywords = ["tello", "voice", "telephony", "websocket", "realtime", "sdk"]
 dependencies = [
-  "websockets>=13",
+  "websockets>=14",
 ]
 
 [project.optional-dependencies]

@@ -44,6 +44,12 @@
   started from a terminal handler. Call `wait_closed()` again to wait for the
   follow-up.
 
+### Changed (packaging)
+
+- Requires `websockets>=14` (was `>=13`). The test suite runs on the asyncio
+  implementation that `websockets` 14 made the default, so 13 was declared
+  but never tested.
+
 ### Breaking changes (PyPI distribution name)
 
 - **Breaking**: the distribution is published as `tello-ai-sdk`. `tello-sdk` on PyPI belongs to an unrelated Tello EDU drone library, so `pip install tello-sdk` never installed this SDK. The import name stays `tello`.
