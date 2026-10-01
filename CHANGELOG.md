@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.3 (2026-10-01)
+
+### Fixed
+
+- The query you put on the URL is now kept exactly as written when the SDK adds
+  its `sdk`/`version`/`protocol` pairs. 0.1.2 re-encoded it (for example `%20`
+  became `+` and invalid UTF-8 escapes were replaced). Pairs whose decoded key is
+  `sdk`, `version` or `protocol` are still replaced, including encoded keys such
+  as `%73dk`.
+
 ## 0.1.2 (2026-10-01)
 
 ### Added
