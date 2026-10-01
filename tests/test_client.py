@@ -850,6 +850,34 @@ async def test_upgrade_url_identifies_sdk(suffix, path, extra):
     }
 
 
+@pytest.mark.parametrize(
+    "suffix, kept",
+    [
+        ("?a=1%202&flag&s=%FF", "a=1%202&flag&s=%FF"),
+        ("?%73dk=custom&x=1&&version=9&pro%74ocol=0", "x=1"),
+        ("?b=1;c=2&s+dk=k", "b=1;c=2&s+dk=k"),
+    ],
+)
+async def test_upgrade_url_keeps_caller_query_verbatim(suffix, kept):
+    # Caller query pairs reach the server byte-for-byte; only pairs whose
+    # form-decoded key is an identity key are dropped before ours are appended.
+    from urllib.parse import quote, urlsplit
+
+    from tello import PROTOCOL_VERSION, __version__
+
+    sink = {}
+    async with running(make_gateway(auto_complete=True, upgrade_sink=sink)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url + suffix):
+            pass
+
+    ident = (
+        f"sdk=python&version={quote(__version__, safe='')}"
+        f"&protocol={quote(PROTOCOL_VERSION, safe='')}"
+    )
+    assert urlsplit(sink["path"]).query == f"{kept}&{ident}"
+
+
+
 async def test_default_url_identifies_sdk(monkeypatch):
     # Neither url= nor TELLO_URL: the client dials the production gateway,
     # identifying itself. The dial is refused, so no network is touched.

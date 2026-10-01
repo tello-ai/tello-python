@@ -44,7 +44,7 @@ import logging
 import os
 import uuid
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import quote, unquote_plus, urlencode, urlsplit, urlunsplit
 
 import websockets
 from websockets.exceptions import ConnectionClosed
@@ -80,14 +80,19 @@ _CLOSE_SESSION_REPLACED = 4429
 def _identified_url(url: str) -> str:
     """Append ``sdk``/``version``/``protocol`` to the upgrade URL query.
 
-    The caller's path and other query keys are kept; same-named keys are
-    replaced by the SDK's values. The server only logs these.
+    The caller's path and query pairs are kept byte-for-byte; only empty pairs
+    and pairs whose form-decoded key is an identity key are dropped, so the
+    SDK's values win. The server only logs these.
     """
     parts = urlsplit(url)
     ident = {"sdk": "python", "version": __version__, "protocol": PROTOCOL_VERSION}
-    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k not in ident]
-    query.extend(ident.items())
-    return urlunsplit(parts._replace(query=urlencode(query)))
+    kept = [
+        pair
+        for pair in parts.query.split("&")
+        if pair and unquote_plus(pair.split("=", 1)[0]) not in ident
+    ]
+    kept.append(urlencode(ident, quote_via=quote))
+    return urlunsplit(parts._replace(query="&".join(kept)))
 
 
 class _CallOutcome:
