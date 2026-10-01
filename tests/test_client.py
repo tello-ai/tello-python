@@ -801,23 +801,6 @@ async def test_env_var_config(monkeypatch):
     assert completed == ["call-1"]
 
 
-async def test_default_url_is_production_gateway(monkeypatch):
-    # Neither url= nor TELLO_URL: the client dials the production gateway.
-    # The dial is refused here, so the test never reaches the network.
-    monkeypatch.delenv("TELLO_URL", raising=False)
-    dialed = []
-
-    async def refuse(url, **kwargs):
-        dialed.append(url)
-        raise OSError("connection refused")
-
-    monkeypatch.setattr(websockets, "connect", refuse)
-    client = TelloClient(api_key=RAW_KEY)
-    with pytest.raises(OSError):
-        await client.connect()
-    assert dialed == ["wss://api.telloai.io/sdk"]
-
-
 def test_missing_api_key_raises(monkeypatch):
     monkeypatch.delenv("TELLO_API_KEY", raising=False)
     with pytest.raises(ValueError):
@@ -835,3 +818,61 @@ async def test_heartbeat_pong_keeps_connection_alive():
             await client.wait_closed()
 
     assert completed == ["call-1"]
+
+
+@pytest.mark.parametrize(
+    "suffix, path, extra",
+    [
+        ("", "/sdk", {}),
+        ("?region=kr&sdk=custom", "/sdk", {"region": ["kr"]}),
+        ("/v2/sdk?a=1%202", "/sdk/v2/sdk", {"a": ["1 2"]}),
+    ],
+)
+async def test_upgrade_url_identifies_sdk(suffix, path, extra):
+    # The upgrade URL carries sdk/version/protocol; the caller's path and other
+    # query keys survive, and SDK keys override same-named caller keys.
+    from urllib.parse import parse_qs, urlsplit
+
+    from tello import PROTOCOL_VERSION, __version__
+
+    sink = {}
+    async with running(make_gateway(auto_complete=True, upgrade_sink=sink)) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url + suffix):
+            pass
+
+    sent = urlsplit(sink["path"])
+    assert sent.path == path
+    assert parse_qs(sent.query) == {
+        **extra,
+        "sdk": ["python"],
+        "version": [__version__],
+        "protocol": [PROTOCOL_VERSION],
+    }
+
+
+async def test_default_url_identifies_sdk(monkeypatch):
+    # Neither url= nor TELLO_URL: the client dials the production gateway,
+    # identifying itself. The dial is refused, so no network is touched.
+    from urllib.parse import parse_qs, urlsplit
+
+    from tello import PROTOCOL_VERSION, __version__
+    from tello import client as client_mod
+
+    opened = []
+
+    async def fake_connect(url, **kwargs):
+        opened.append(url)
+        raise OSError("stop")
+
+    monkeypatch.delenv("TELLO_URL", raising=False)
+    monkeypatch.setattr(client_mod.websockets, "connect", fake_connect)
+    with pytest.raises(OSError):
+        await TelloClient(api_key=RAW_KEY).connect()
+
+    sent = urlsplit(opened[0])
+    assert (sent.scheme, sent.netloc, sent.path) == ("wss", "api.telloai.io", "/sdk")
+    assert parse_qs(sent.query) == {
+        "sdk": ["python"],
+        "version": [__version__],
+        "protocol": [PROTOCOL_VERSION],
+    }

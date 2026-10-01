@@ -36,6 +36,7 @@ export TELLO_URL="wss://api.telloai.io/sdk"   # optional; defaults to wss://api.
 ```
 
 `TelloClient()` with no arguments then reads `TELLO_API_KEY` / `TELLO_URL`.
+The client appends `sdk=python&version=<package version>&protocol=<PROTOCOL_VERSION>` to the URL query (other path/query parts are kept); the server only logs them.
 
 ## 3. Connect + start a call
 

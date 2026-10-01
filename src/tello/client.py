@@ -44,10 +44,12 @@ import logging
 import os
 import uuid
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import websockets
 from websockets.exceptions import ConnectionClosed
 
+from ._version import __version__
 from .commands import (
     answer_frame,
     auth_frame,
@@ -67,11 +69,25 @@ from .errors import (
 )
 from .events import ErrorEvent, Event, EventType, is_terminal, parse_event
 from .realtime import EventEmitter
+from .types import PROTOCOL_VERSION
 
 logger = logging.getLogger("tello")
 
 _CLOSE_UNAUTHENTICATED = 4401
 _CLOSE_SESSION_REPLACED = 4429
+
+
+def _identified_url(url: str) -> str:
+    """Append ``sdk``/``version``/``protocol`` to the upgrade URL query.
+
+    The caller's path and other query keys are kept; same-named keys are
+    replaced by the SDK's values. The server only logs these.
+    """
+    parts = urlsplit(url)
+    ident = {"sdk": "python", "version": __version__, "protocol": PROTOCOL_VERSION}
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k not in ident]
+    query.extend(ident.items())
+    return urlunsplit(parts._replace(query=urlencode(query)))
 
 
 class _CallOutcome:
@@ -156,7 +172,7 @@ class TelloClient(EventEmitter):
             self._call_outcome = _CallOutcome()
         self._close_exc = None
         self._ws = await websockets.connect(
-            self._config.url,
+            _identified_url(self._config.url),
             open_timeout=self._config.open_timeout,
             close_timeout=self._config.close_timeout,
         )
