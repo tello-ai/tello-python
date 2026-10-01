@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.2 (2026-10-01)
+
+### Added
+
+- The WebSocket upgrade URL now carries `sdk=python`, `version=<package version>`
+  and `protocol=<PROTOCOL_VERSION>` so the gateway can log which client
+  connected. The URL's path and other query parameters are kept; those three
+  keys replace any it already had. The server never rejects a connection over
+  them.
+
 ## 0.1.1 (2026-09-30)
 
 ### Changed
