@@ -18,6 +18,7 @@ ws(s)://<host>:<port>/sdk
 ```
 
 - 기본 포트 3000. WebSocket 서브프로토콜 협상 없음.
+- 선택 쿼리 `sdk`(`js`|`python`|`go`|`java`|`rust`), `version`(SDK 패키지 버전, `v` 없음), `protocol`(`PROTOCOL_VERSION`). 예: `/sdk?sdk=python&version=0.1.1&protocol=1.0`. 서버는 로그에만 남기며 없거나 형식이 틀려도 연결을 거절하지 않는다.
 - 한 연결당 활성 통화는 하나다.
 
 ## 2. 인증 (애플리케이션 핸드셰이크)

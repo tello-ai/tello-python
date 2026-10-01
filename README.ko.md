@@ -35,6 +35,7 @@ export TELLO_URL="wss://api.telloai.io/sdk"   # 선택. 기본값 wss://api.tell
 ```
 
 인자 없이 `TelloClient()`를 호출하면 `TELLO_API_KEY` / `TELLO_URL`을 읽습니다.
+클라이언트는 URL 쿼리에 `sdk=python&version=<패키지 버전>&protocol=<PROTOCOL_VERSION>`을 붙입니다(기존 경로·쿼리는 유지). 서버는 이 값을 로그에만 남깁니다.
 
 ## 3. 연결 + 통화 시작
 
