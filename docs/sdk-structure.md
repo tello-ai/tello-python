@@ -6,6 +6,7 @@
 > 목적: Tello SDK를 Python / Node.js / Java / Go 중심으로 만들 때의 폴더 구조, 책임 경계, 버전관리 기준을 정리한다.
 > 상태: Locked. 초기 공식 SDK는 Python / Node.js / Java / Go로 고정한다.
 > 전송: **WebSocket 전용.** SDK는 turn-provider-gateway의 `/sdk` WebSocket 엔드포인트로만 붙는다. REST 호출, 콜백 HTTP 서버, 웹훅(HMAC) 방식은 이 SDK의 범위가 아니다.
+> 갱신(2026-11-12): 공개 REST 자원 API(도구·에이전트·크루·크루 생성·통화 초안)는 WS 클라이언트와 별도인 `TelloApi`(`api.py`)로 제공한다. 통화 REST(생성·조회·종료·전환)는 여전히 범위 밖이다.
 > 참고: ClawOps Node.js SDK, ClawOps Python SDK 구조를 비교 참고했다. 프로토콜 계약의 원천은 `sdk/contracts/`와 turn-provider-gateway 구현이다.
 
 참조 URL:
@@ -91,6 +92,7 @@ office-sdk/
             _version.py
             py.typed
             client.py           # WS 연결 수명주기 + 명령 전송 + 인바운드 디스패치
+            api.py              # TelloApi: 공개 REST 자원 API(도구·에이전트·크루·크루 생성·통화 초안)
             realtime.py         # pub/sub 이벤트 핸들러 + answer
             events.py           # 인바운드 flat 프레임 파서 + EventType
             commands.py         # 아웃바운드 {event,data} 봉투 빌더

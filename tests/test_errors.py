@@ -17,6 +17,7 @@ from tello import (
     CallRefusedError,
     CallRejectedError,
     NoActiveCallError,
+    PermissionDeniedError,
     TelloError,
     TelloServerError,
     ValidationError,
@@ -25,6 +26,8 @@ from tello.errors import exception_for
 
 CONTRACT = [
     ("unauthenticated", AuthenticationError),
+    ("ipNotAllowed", AuthenticationError),
+    ("insufficientScope", PermissionDeniedError),
     ("callAlreadyActive", CallAlreadyActiveError),
     ("toRequired", ValidationError),
     ("callIdRequired", ValidationError),
@@ -81,3 +84,22 @@ def test_call_rejected_preserves_question() -> None:
     assert isinstance(error, CallRejectedError)
     assert error.question == "why?"
     assert error.code == "callRejected"
+
+
+def test_insufficient_scope_carries_required_scope() -> None:
+    error = exception_for("insufficientScope", "m", required_scope="calls:write")
+
+    assert isinstance(error, PermissionDeniedError)
+    assert error.required_scope == "calls:write"
+
+
+def test_ip_not_allowed_carries_ip() -> None:
+    error = exception_for("ipNotAllowed", "m", ip="203.0.113.7")
+
+    assert isinstance(error, AuthenticationError)
+    assert error.ip == "203.0.113.7"
+
+
+def test_permission_denied_does_not_shadow_the_builtin() -> None:
+    assert PermissionDeniedError is not PermissionError
+    assert issubclass(PermissionDeniedError, TelloError)

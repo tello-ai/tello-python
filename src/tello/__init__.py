@@ -1,4 +1,5 @@
-"""Tello SDK for Python — WebSocket realtime client for turn-provider-gateway.
+"""Tello SDK for Python — WebSocket realtime client and REST resource API client
+(:class:`TelloApi`) for the Tello API gateway (api-gateway).
 
     import asyncio
     from tello import TelloClient, EventType
@@ -16,8 +17,9 @@
 """
 
 from ._version import __version__
+from .api import TelloApi
 from .client import TelloClient
-from .config import DEFAULT_URL, ClientConfig
+from .config import DEFAULT_API_URL, DEFAULT_URL, ClientConfig
 from .errors import (
     AuthenticationError,
     CallAlreadyActiveError,
@@ -26,7 +28,10 @@ from .errors import (
     CallRejectedError,
     ConnectionClosedError,
     NoActiveCallError,
+    PermissionDeniedError,
     SessionReplacedError,
+    TelloApiConnectionError,
+    TelloApiError,
     TelloError,
     TelloServerError,
     ValidationError,
@@ -50,8 +55,10 @@ from .types import PROTOCOL_VERSION, PublicStatus
 __all__ = [
     "__version__",
     "TelloClient",
+    "TelloApi",
     "ClientConfig",
     "DEFAULT_URL",
+    "DEFAULT_API_URL",
     "EventType",
     "Event",
     "CallCreatedEvent",
@@ -72,9 +79,12 @@ __all__ = [
     "ValidationError",
     "CallAlreadyActiveError",
     "NoActiveCallError",
+    "PermissionDeniedError",
     "CallRejectedError",
     "CallRefusedError",
     "CallProviderError",
     "SessionReplacedError",
     "TelloServerError",
+    "TelloApiError",
+    "TelloApiConnectionError",
 ]

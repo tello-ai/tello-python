@@ -21,6 +21,7 @@ from tello import (
     ClientConfig,
     ConnectionClosedError,
     EventType,
+    PermissionDeniedError,
     SessionReplacedError,
     TelloClient,
     TelloServerError,
@@ -112,8 +113,8 @@ def _completed():
     )
 
 
-def _error(code, message, request_id=None):
-    frame = {"type": "error", "version": "1.0", "code": code, "message": message}
+def _error(code, message, request_id=None, **extra):
+    frame = {"type": "error", "version": "1.0", "code": code, "message": message, **extra}
     if request_id is not None:
         frame["requestId"] = request_id
     return json.dumps(frame)
@@ -139,6 +140,8 @@ def make_gateway(
     received=None,
     upgrade_sink=None,
     refuse_create=None,
+    refuse_extra=None,
+    auth_reply=None,
     stream_failure=None,
     cleanup_window=0,
 ):
@@ -163,6 +166,13 @@ def make_gateway(
 
         if auth_close_only:
             await ws.close(4401, "unauthenticated")
+            return
+        if auth_reply is not None:
+            # (error frame or None, close code, close reason) answering auth
+            frame, close_code, reason = auth_reply
+            if frame is not None:
+                await ws.send(frame)
+            await ws.close(close_code, reason)
             return
         if msg.get("event") != "auth" or data.get("token") != api_key:
             await ws.send(_error("unauthenticated", "Authentication required", data.get("requestId")))
@@ -213,7 +223,14 @@ def make_gateway(
                 if refuse_create is not None:
                     # outbound-gate refusal: one error echoing the createCall
                     # requestId, no call.created, socket stays open
-                    await ws.send(_error(refuse_create, "Call refused", data.get("requestId")))
+                    await ws.send(
+                        _error(
+                            refuse_create,
+                            "Call refused",
+                            data.get("requestId"),
+                            **(refuse_extra or {}),
+                        )
+                    )
                     continue
                 if close_4429:
                     await ws.close(4429, "session replaced")
@@ -430,6 +447,53 @@ async def test_4401_close_without_error_frame_raises_from_connect():
         with pytest.raises(AuthenticationError):
             await client.connect()
         await client.aclose()
+
+
+async def test_ip_not_allowed_frame_raises_authentication_error_with_ip():
+    frame = _error("ipNotAllowed", "IP not allowed", ip="203.0.113.7")
+    async with running(make_gateway(auth_reply=(frame, 4401, "ip_not_allowed"))) as url:
+        client = TelloClient(api_key=RAW_KEY, url=url)
+        with pytest.raises(AuthenticationError) as exc_info:
+            await client.connect()
+        await client.aclose()
+
+    assert exc_info.value.code == "ipNotAllowed"
+    assert exc_info.value.ip == "203.0.113.7"
+
+
+async def test_auth_internal_error_frame_raises_server_error():
+    # The gateway could not check the key: not a refusal, retrying later is fine.
+    frame = _error("internalError", "Internal error")
+    async with running(make_gateway(auth_reply=(frame, 1011, "internal_error"))) as url:
+        client = TelloClient(api_key=RAW_KEY, url=url)
+        with pytest.raises(TelloServerError) as exc_info:
+            await client.connect()
+        await client.aclose()
+
+    assert not isinstance(exc_info.value, AuthenticationError)
+    assert exc_info.value.code == "internalError"
+
+
+async def test_auth_1011_close_without_frame_raises_server_error():
+    async with running(make_gateway(auth_reply=(None, 1011, "internal_error"))) as url:
+        client = TelloClient(api_key=RAW_KEY, url=url)
+        with pytest.raises(TelloServerError):
+            await client.connect()
+        await client.aclose()
+
+
+async def test_insufficient_scope_on_create_call_raises_permission_denied():
+    gateway = make_gateway(
+        refuse_create="insufficientScope", refuse_extra={"requiredScope": "calls:write"}
+    )
+    async with running(gateway) as url:
+        async with TelloClient(api_key=RAW_KEY, url=url) as client:
+            await client.create_call(to="+821012345678", request_id="create-1")
+            with pytest.raises(PermissionDeniedError) as exc_info:
+                await asyncio.wait_for(client.wait_closed(), timeout=2)
+
+    assert exc_info.value.code == "insufficientScope"
+    assert exc_info.value.required_scope == "calls:write"
 
 
 async def test_auth_ok_timeout_raises_from_connect():
