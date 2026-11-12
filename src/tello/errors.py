@@ -1,9 +1,13 @@
-"""SDK exception hierarchy, mapped 1:1 from gateway error codes.
+"""SDK exception hierarchy.
 
-See ``docs/errors/errors.v1.json``.
+WebSocket errors map 1:1 from gateway error codes (see
+``docs/errors/errors.v1.json``); REST errors are :class:`TelloApiError` and
+:class:`TelloApiConnectionError`.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 
 class TelloError(Exception):
@@ -77,6 +81,56 @@ class CallProviderError(TelloError):
 
 class TelloServerError(TelloError):
     """Gateway-side internal error (``internalError``)."""
+
+
+class TelloApiError(TelloError):
+    """The REST API (:class:`tello.TelloApi`) answered with an error.
+
+    ``code`` is the envelope's ``error`` exactly as sent, in snake_case
+    (``tool_not_found``, ``insufficient_scope``, …), so it matches the public
+    error table. Branch on ``code`` and ``status``, not on ``message``.
+
+    - An error response that is not the JSON envelope (a proxy page, for
+      example) has ``code = "http_<status>"``, the HTTP reason phrase as
+      ``message`` and ``data = None``.
+    - A success status the API does not document for the method, or a
+      success body that is not a JSON object, has ``code = "invalid_response"``.
+
+    ``data`` is the envelope's ``data`` object (``None`` when absent).
+    ``idempotency_key`` is the ``Idempotency-Key`` the request carried, or
+    ``None``; resend with the same key to retry the same request.
+    """
+
+    code: str
+
+    def __init__(
+        self,
+        status: int,
+        code: str,
+        message: str,
+        data: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> None:
+        super().__init__(message, code)
+        self.status = status
+        self.message = message
+        self.data = data
+        self.idempotency_key = idempotency_key
+
+
+class TelloApiConnectionError(TelloError):
+    """A REST request got no response: the connection failed or timed out.
+
+    The cause is kept as ``__cause__``. A write (create, update, delete,
+    ``crews.generate``, call draft create/revise/confirm) that fails this way
+    **may still have been applied**: check with ``get``/``list`` before
+    resending, and resend a create with the same ``idempotency_key`` (kept
+    here; ``call_drafts.confirm`` always has one) so it is not done twice.
+    """
+
+    def __init__(self, message: str, idempotency_key: str | None = None) -> None:
+        super().__init__(message)
+        self.idempotency_key = idempotency_key
 
 
 _CODE_TO_EXCEPTION: dict[str, type[TelloError]] = {
