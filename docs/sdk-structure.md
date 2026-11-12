@@ -5,9 +5,8 @@
 > 작성일: 2026-06-29 (WS-only 재정리: 2026-07-07)
 > 목적: Tello SDK를 Python / Node.js / Java / Go 중심으로 만들 때의 폴더 구조, 책임 경계, 버전관리 기준을 정리한다.
 > 상태: Locked. 초기 공식 SDK는 Python / Node.js / Java / Go로 고정한다.
-> 전송: **WebSocket 전용.** SDK는 turn-provider-gateway의 `/sdk` WebSocket 엔드포인트로만 붙는다. REST 호출, 콜백 HTTP 서버, 웹훅(HMAC) 방식은 이 SDK의 범위가 아니다.
-> 갱신(2026-11-12): 공개 REST 자원 API(도구·에이전트·크루·크루 생성·통화 초안)는 WS 클라이언트와 별도인 `TelloApi`(`api.py`)로 제공한다. 통화 REST(생성·조회·종료·전환)는 여전히 범위 밖이다.
-> 참고: ClawOps Node.js SDK, ClawOps Python SDK 구조를 비교 참고했다. 프로토콜 계약의 원천은 `sdk/contracts/`와 turn-provider-gateway 구현이다.
+> 전송: 실시간 통화는 **WebSocket**(`TelloClient`, API 게이트웨이(api-gateway)의 `/sdk` 엔드포인트). 도구·에이전트·크루·크루 생성·통화 초안 같은 자원 관리는 별도 REST 클라이언트 `TelloApi`(`api.py`, 공개 REST API `/v1`)로 한다(2026-11-12 추가). 통화 REST(생성·조회·종료·전환), 콜백 HTTP 서버, 웹훅(HMAC) 방식은 이 SDK의 범위가 아니다.
+> 참고: ClawOps Node.js SDK, ClawOps Python SDK 구조를 비교 참고했다. 프로토콜 계약의 원천은 `sdk/contracts/`와 API 게이트웨이(api-gateway) 구현이다.
 
 참조 URL:
 
@@ -29,6 +28,7 @@ SDK 책임:
 - 실시간 turn 이벤트(`user.turn` 등) 수신 및 pub/sub 디스패치
 - 응답 텍스트 전송(`answer`)
 - 하트비트 pong 응답, 타임아웃, 에러 타입 정리
+- 도구·에이전트·크루·크루 생성·통화 초안 REST 자원 관리(`TelloApi`)
 - 예제와 테스트 제공
 
 SDK가 하지 말아야 할 일:
@@ -42,8 +42,8 @@ SDK가 하지 말아야 할 일:
 핵심 경계:
 
 ```text
-Tello 서버 = 전화 인프라 + 세션 상태 + STT/TTS 실행 + turn-provider-gateway(/sdk WS)
-SDK       = 가입자 코드에서 gateway WS에 붙어 통화 turn을 주고받는 클라이언트
+Tello 서버 = 전화 인프라 + 세션 상태 + STT/TTS 실행 + api-gateway(/sdk WS, 공개 REST /v1)
+SDK       = 가입자 코드에서 gateway WS에 붙어 통화 turn을 주고받는 클라이언트 + 자원 관리 REST 클라이언트(TelloApi)
 가입자 앱  = AI 판단, 업무 시스템 연동, 대화 정책
 ```
 
@@ -219,7 +219,7 @@ Python:
 
 ### 3.1 WS 프로토콜 계약
 
-SDK는 turn-provider-gateway의 `/sdk` WebSocket 엔드포인트에만 붙는다. REST OpenAPI는 이 SDK 범위가 아니다. 프로토콜 계약은 하나의 문서로 관리한다.
+실시간 통화는 API 게이트웨이(api-gateway)의 `/sdk` WebSocket 엔드포인트로 한다. REST 자원 API(`TelloApi`)의 기준은 공개 REST 문서이며, 이 절의 WS 계약과 따로 관리한다. WS 프로토콜 계약은 하나의 문서로 관리한다.
 
 ```text
 sdk/contracts/protocol/sdk-ws.v1.md
@@ -320,7 +320,7 @@ async def on_user_turn(event):
     await client.answer(text=my_agent.respond(event.text))
 ```
 
-전송은 WebSocket 전용이다. 단순 폴링은 MCP 도구용으로만 유지하고 SDK에는 포함하지 않는다.
+실시간 turn 전송은 WebSocket으로 한다. 단순 폴링은 MCP 도구용으로만 유지하고 SDK에는 포함하지 않는다.
 
 ### 4.4 `errors`
 
@@ -352,7 +352,7 @@ SDK 방식 호출 흐름:
 ```text
 가입자 앱
   ↓ SDK (outbound WS)
-turn-provider-gateway /sdk
+api-gateway /sdk
   ↓
 VGW
   ↓
@@ -366,7 +366,7 @@ VGW
   ↓
 VGW STT
   ↓
-turn-provider-gateway
+api-gateway
   ↓ user.turn 이벤트 (WS)
 SDK pub/sub 핸들러
   ↓ 가입자 AI 응답 생성
@@ -382,11 +382,11 @@ Tello TTS
 | 영역 | 책임 |
 | --- | --- |
 | VGW | 전화 연결, STT/TTS, 통화 세션 실행 |
-| turn-provider-gateway | SDK용 `/sdk` WS 전송 브리지, API 인증 |
+| API 게이트웨이(api-gateway) | SDK용 `/sdk` WS 전송 브리지, 공개 REST API(`/v1`), API 인증 |
 | Portal | 가입자 설정, 키 발급, 사용량 확인 |
 | SDK | 개발자 앱에서 gateway WS에 붙는 클라이언트 라이브러리 |
 
-SDK는 서버 내부 구현을 직접 import하지 않는다. 외부 계약은 **WS 명령/이벤트 프레임**뿐이다.
+SDK는 서버 내부 구현을 직접 import하지 않는다. 외부 계약은 **WS 명령/이벤트 프레임**과 공개 REST API뿐이다.
 
 ---
 
@@ -882,9 +882,9 @@ v1.0.0
 ## 15. 결정 사항 요약
 
 - SDK 루트는 `sdk/`로 분리한다.
-- **SDK 전송은 WebSocket 전용이다. REST/webhook은 범위 밖.**
+- **실시간 통화는 WebSocket(`TelloClient`), 자원 관리는 REST(`TelloApi`)다. 통화 REST와 webhook은 범위 밖.**
 - 계약은 `sdk/contracts/`(WS 프로토콜 문서 + 이벤트/에러 JSON Schema)를 기준으로 한다.
-- SDK는 서버 내부 구현을 import하지 않는다. 외부 계약은 WS 명령/이벤트 프레임뿐이다.
+- SDK는 서버 내부 구현을 import하지 않는다. 외부 계약은 WS 명령/이벤트 프레임과 공개 REST API뿐이다.
 - 프로토콜 major version은 프레임 `version` 필드로 관리한다.
 - SDK는 SemVer를 따른다.
 - Python / Node / Java / Go SDK는 기능 parity를 목표로 한다.

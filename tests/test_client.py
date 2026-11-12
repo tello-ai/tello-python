@@ -1,6 +1,6 @@
 """Integration tests driving TelloClient against an in-memory fake gateway.
 
-The fake mimics turn-provider-gateway `/sdk`: an application-level auth
+The fake mimics the API gateway (api-gateway) `/sdk`: an application-level auth
 handshake (first frame must be `auth` with the raw key in `token`, server
 replies `auth.ok`), inbound `{event, data}` command frames, and flat outbound
 event frames.

@@ -46,7 +46,7 @@ def require_environment() -> dict[str, str | float]:
         ),
         "reply": os.environ.get(
             "LIVE_CALL_REPLY",
-            "This is a controlled TPG SDK live scenario. Thank you.",
+            "This is a controlled api-gateway SDK live scenario. Thank you.",
         ),
     }
 

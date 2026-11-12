@@ -1,6 +1,6 @@
 """Tello WebSocket realtime client.
 
-Opens a single WS connection to the turn-provider-gateway ``/sdk`` endpoint,
+Opens a single WS connection to the API gateway (api-gateway) ``/sdk`` endpoint,
 sends command frames (``create_call`` / ``answer`` / ``cancel``) and dispatches
 inbound turn/status/terminal/error events to pub/sub handlers.
 
