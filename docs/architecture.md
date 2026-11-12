@@ -250,7 +250,7 @@ summary = telephony_get_summary(call_id=call_id)
 
 ### 5.1 개요
 
-> **SDK 전송은 WebSocket 전용이다.** 가입자 앱이 turn-provider-gateway의 `/sdk` WebSocket에 **outbound 연결**을 열고, 그 위에서 통화를 시작하고 상대방 발화(turn)를 이벤트로 받아 응답한다. 콜백 HTTP 서버를 띄우거나 웹훅(HMAC)을 검증하는 방식은 쓰지 않는다. 프로토콜 계약은 `docs/protocol/sdk-ws.v1.md`가 기준이다.
+> **실시간 통화는 WebSocket으로 한다.** 가입자 앱이 API 게이트웨이(api-gateway)의 `/sdk` WebSocket에 **outbound 연결**을 열고, 그 위에서 통화를 시작하고 상대방 발화(turn)를 이벤트로 받아 응답한다. 콜백 HTTP 서버를 띄우거나 웹훅(HMAC)을 검증하는 방식은 쓰지 않는다. 프로토콜 계약은 `docs/protocol/sdk-ws.v1.md`가 기준이다. 도구·에이전트·크루·크루 생성·통화 초안 같은 자원 관리는 별도 REST 클라이언트 `TelloApi`(공개 REST API `/v1`)로 한다. 통화 REST(생성·조회·종료·전환)는 SDK에 없다.
 
 가입자 앱은 SDK로 gateway에 WS 연결을 열고, 발화 이벤트를 pub/sub 핸들러로 받아 가입자 AI 응답을 되돌린다.
 
@@ -258,7 +258,7 @@ summary = telephony_get_summary(call_id=call_id)
 가입자 앱 (SDK)
     │  WS connect  ws(s)://<host>/sdk  (첫 프레임 auth → auth.ok)
     ▼
-turn-provider-gateway  ◄──►  VGW
+api-gateway  ◄──►  VGW
     │
     ▼ user.turn 이벤트 (상대방 STT 텍스트, WS 프레임)
 가입자 앱 SDK 핸들러
@@ -266,7 +266,7 @@ turn-provider-gateway  ◄──►  VGW
     ▼ 가입자 AI 로직 실행 (사내 LLM, ERP 조회 등)
     │
     ▼ answer(text) 전송 (WS 프레임)
-turn-provider-gateway → VGW
+api-gateway → VGW
     │
     ▼ TTS → 음성 출력
 ```
@@ -536,7 +536,7 @@ Agent 연계형 개발 시 반드시 이해해야 하는 VGW 파이프라인.
     │
     └─ Agent 연계형:
          ├─ MCP형: telephony_listen 폴링 응답 → [TTS]
-         └─ SDK형: turn-provider-gateway WS(user.turn↔answer) → [TTS]
+         └─ SDK형: api-gateway WS(user.turn↔answer) → [TTS]
 ```
 
 **Agent 연계형 활성화 조건:**
@@ -778,7 +778,7 @@ tello-python/
 고객 발화 종료
     │
     ▼ [Deepgram STT 완료]
-VGW → turn-provider-gateway
+VGW → api-gateway
     │
     ▼ user.turn WS 프레임 push (봉투 없는 flat)
     │   { type:"user.turn", sessionId, callId, turnIndex, text, ... }
@@ -788,7 +788,7 @@ VGW → turn-provider-gateway
     │ user.turn 핸들러 실행
     │
     ▼ answer 명령 프레임 전송: { event:"answer", data:{ text } }
-turn-provider-gateway → VGW
+api-gateway → VGW
     │
     ▼ TTS → 음성 출력
 ```
@@ -945,7 +945,7 @@ SIP 실통화 테스트는 LiveKit Cloud 연동 필수.
 | 1 | SDK 패키지 구조 설계 (WS 계약 확정) | 1일 |
 | 2 | Python SDK 구현 (asyncio + websockets, pub/sub) | 5일 |
 | 3 | Node.js SDK 구현 | 4일 |
-| 4 | turn-provider-gateway `/sdk` WS 엔드포인트 | (구현 완료) |
+| 4 | API 게이트웨이(api-gateway) `/sdk` WS 엔드포인트 | (구현 완료) |
 | 5 | 포털 API Key 발급/관리 UI | 2일 |
 | 6 | gateway ↔ VGW turn 브리지 연동 검증 | 3일 |
 | 7 | SDK 문서 + 예제 코드 | 3일 |

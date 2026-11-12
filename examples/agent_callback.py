@@ -9,7 +9,7 @@ Shows the full lifecycle and every inbound event:
 * ending the call early with `cancel()` on an intent keyword
 * mapping error frames / auth failure to exceptions
 
-Run against a locally-running turn-provider-gateway:
+Run against a locally-running API gateway (api-gateway):
 
     TELLO_API_KEY=tello_live_xxx TELLO_URL=ws://localhost:3000/sdk \
         python examples/agent_callback.py
