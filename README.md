@@ -5,12 +5,13 @@
 > repo: `tello-python` · PyPI package: `tello-ai-sdk` · import: `tello`
 
 Tello SDK for Python — a thin **WebSocket** realtime client for the
-turn-provider-gateway `/sdk` endpoint. The SDK is the "conversation brain":
+API gateway (api-gateway) `/sdk` endpoint, plus `TelloApi`, a client for the
+public REST resource API. The WebSocket client is the "conversation brain":
 the gateway streams each caller turn from a live phone call, and your handler's
 reply is forwarded back into the call.
 
-> Transport is WebSocket only. There is no REST or webhook surface. The protocol
-> contract lives in [`docs/protocol/sdk-ws.v1.md`](https://github.com/tello-ai/tello-python/blob/main/docs/protocol/sdk-ws.v1.md).
+> The realtime protocol contract lives in [`docs/protocol/sdk-ws.v1.md`](https://github.com/tello-ai/tello-python/blob/main/docs/protocol/sdk-ws.v1.md).
+> The REST resource API (tools, agents, crews, call drafts) is in §6.
 
 ## 1. Install
 
@@ -182,7 +183,118 @@ The gateway drives a WS-level ping heartbeat; `websockets` answers pongs
 automatically. There is no reconnect/resume — treat an abnormal close as
 reconnect-worthy and restart the call.
 
-## 6. Examples
+## 6. REST resource API (`TelloApi`)
+
+`TelloApi` is a separate client for the public REST API: tools, agents and
+crews (create, read, update, delete), agent and crew lists, crew generation
+from a goal, and call drafts. It needs no extra dependency (the standard
+library's `urllib`, run off the event loop). Bodies and results are plain
+`dict[str, Any]`, so fields this SDK does not know yet are kept.
+
+```python
+import asyncio
+from tello import TelloApi, TelloApiError
+
+async def main():
+    api = TelloApi()  # reads TELLO_API_KEY (and TELLO_API_URL, if set)
+    agents = await api.agents.list()
+    tool = await api.tools.create(
+        {"type": "endCall", "name": "End call", "functionName": "end_call"},
+        idempotency_key="tool-end-call-001",
+    )
+    await api.tools.update(tool["id"], {"description": "Ends the call politely"})
+
+asyncio.run(main())
+```
+
+- **Key**: `TelloApi(api_key=...)`, else `TELLO_API_KEY` (same rule and error as
+  `TelloClient`). It is sent as `Authorization: Bearer <key>` and never appears in
+  `repr()` or error messages.
+- **URL**: `api_url=...`, else `TELLO_API_URL`, else `https://api.telloai.io/v1`.
+  Only `https`; `http` only for `127.0.0.1`, `localhost` or `::1` (tests).
+- **Timeouts**: 30 s per request; 120 s for `crews.generate` and the three
+  `call_drafts` requests. Override with `timeout=` / `long_timeout=` (seconds).
+- **No automatic retries.** Retrying (with the same idempotency key) is yours.
+- Every request sends `User-Agent: tello-python-sdk/<version>`.
+
+| method | HTTP | success | returns |
+| --- | --- | --- | --- |
+| `tools.list(*, limit=None, cursor=None)` | `GET /tools` | 200 | `{"data": [...], "nextCursor": str \| None}` |
+| `tools.get(id)` | `GET /tools/{id}` | 200 | tool |
+| `tools.create(body, *, idempotency_key=None)` | `POST /tools` | 201 | tool (with `revision`) |
+| `tools.update(id, patch)` | `PATCH /tools/{id}` | 200 | tool |
+| `tools.delete(id)` | `DELETE /tools/{id}` | 204 | `None` |
+| `agents.list()` | `GET /agents` | 200 | `{"data": [{"id", "name", "description", "isDefault"}]}` |
+| `agents.get` / `create` / `update` / `delete` | `/agents[/{id}]` | 200 / 201 / 200 / 204 | agent / `None` |
+| `crews.list()` | `GET /crews` | 200 | `{"data": [...]}` |
+| `crews.get` / `create` / `update` / `delete` | `/crews[/{id}]` | 200 / 201 / 200 / 204 | crew / `None` |
+| `crews.generate(body, *, idempotency_key=None)` | `POST /crews/generate` | 202 (200: existing job of the same goal) | job `{"id", "status": "running", ...}` |
+| `crews.generate_and_wait(body, *, poll_interval=2.0, timeout=600.0, idempotency_key=None)` | generate, then poll | — | finished job (`succeeded` or `failed`) |
+| `crew_generations.get(id)` | `GET /crew-generations/{id}` | 200 | job (`running` / `succeeded` / `failed`) |
+| `call_drafts.create(body, *, idempotency_key=None)` | `POST /call-drafts` | 201 | draft |
+| `call_drafts.revise(draft_id, request, *, idempotency_key=None)` | `POST /call-drafts/{id}/revise` `{"request": ...}` | 200 | draft with a **new id** |
+| `call_drafts.confirm(draft_id, *, idempotency_key=None)` | `POST /call-drafts/{id}/confirm` (no body) | 201 | the placed call |
+
+> **Writes go live at once.** Creating, updating or deleting a tool, agent or
+> crew (and `crews.generate`) saves, deploys and publishes it: the next call
+> uses it. There is no draft or staging step.
+>
+> **`call_drafts.confirm` places a real, billed phone call.** `call_drafts.create`
+> may also call at once when the agent's scenario is ready (`status` `confirmed`
+> with a `callId`). Every draft `status` (`pendingConfirmation`,
+> `needsClarification`, `refused`, `confirmed`) is a `201` success, not an error.
+
+Idempotency keys are sent only when you pass `idempotency_key` (create, generate,
+draft create/revise). `call_drafts.confirm` always sends one: yours, or a
+generated UUID v4. A key must be 1–255 bytes with no comma or control character,
+otherwise `ValueError` is raised before any request; so is an empty id.
+`generate_and_wait` returns a `failed` job instead of raising (branch on
+`job["status"]`) and raises `TimeoutError` with the job id when it is still
+running after `timeout`.
+
+### REST errors
+
+An error response raises `TelloApiError` (a `TelloError`) with `status` (HTTP),
+`code` (the envelope's `error`, verbatim snake_case), `message`, `data` (dict or
+`None`) and `idempotency_key` (the key sent, or `None`). A response that is not
+the error envelope (a proxy page, for example) has `code = "http_<status>"`; an
+undocumented success status or a body that is not a JSON object has
+`code = "invalid_response"`. When no response arrives (connection failure or
+timeout) `TelloApiConnectionError` is raised with `idempotency_key` and the
+cause on `__cause__` — **a write that fails this way may still have been
+applied**: check with `get`/`list` before resending.
+
+| HTTP | `code` | meaning |
+| --- | --- | --- |
+| 401 | `unauthenticated` | key missing, wrong or revoked |
+| 403 | `insufficient_scope` | the key lacks the scope (`data.requiredScope`) |
+| 404 | `tool_not_found` / `agent_not_found` / `crew_not_found` | no such item in this account |
+| 404 | `crew_generation_not_found` / `draft_not_found` | no such job or draft |
+| 409 | `idempotency_key_reused` | the key was used for a different request |
+| 409 | `crew_generation_in_progress` | another goal is being built (`data.id`) |
+| 409 | `draft_already_confirmed` | the draft was confirmed (`data.callId`) |
+| 502 | `write_outcome_unknown` | the write may have been applied; check before creating again |
+| 503 | `upstream_unavailable` | not processed; resend later |
+
+The full list is in the public REST error reference. Branch on `code`, never on
+`message`:
+
+```python
+from tello import TelloApiConnectionError, TelloApiError
+
+try:
+    call = await api.call_drafts.confirm(draft_id)
+except TelloApiError as e:
+    if e.code == "draft_already_confirmed":
+        print("already placed:", e.data["callId"])
+    else:
+        raise
+except TelloApiConnectionError as e:
+    # The call may have been placed: retry with the same key, never a new one.
+    call = await api.call_drafts.confirm(draft_id, idempotency_key=e.idempotency_key)
+```
+
+## 7. Examples
 
 Runnable programs live in [`examples/`](https://github.com/tello-ai/tello-python/blob/main/examples/README.md):
 
@@ -194,7 +306,7 @@ uv run python examples/call_summary.py     # gated live scenario ending in call.
 
 They place real calls. Read [`examples/README.md`](https://github.com/tello-ai/tello-python/blob/main/examples/README.md) first.
 
-## 7. Version compatibility
+## 8. Version compatibility
 
 `tello-ai-sdk 0.1.x` implements Tello WS protocol `1.0`.
 

@@ -1,4 +1,5 @@
-"""Tello SDK for Python — WebSocket realtime client for turn-provider-gateway.
+"""Tello SDK for Python — WebSocket realtime client and REST resource API client
+(:class:`TelloApi`) for the Tello API gateway (api-gateway).
 
     import asyncio
     from tello import TelloClient, EventType

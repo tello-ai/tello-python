@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `TelloApi`, an async client for the public REST resource API, separate from
+  the WebSocket `TelloClient`: `tools` (list/get/create/update/delete),
+  `agents` and `crews` (list/get/create/update/delete), `crews.generate` and
+  `crews.generate_and_wait`, `crew_generations.get`, and `call_drafts`
+  (create/revise/confirm). It reads `TELLO_API_KEY` and `TELLO_API_URL`
+  (default `https://api.telloai.io/v1`), allows plain `http` only on loopback,
+  sends `User-Agent: tello-python-sdk/<version>`, never retries, and adds no
+  dependency. `call_drafts.confirm` places a real, billed call and always sends
+  an `Idempotency-Key` (a UUID v4 when you pass none).
+- `TelloApiError` (`status`, snake_case `code`, `message`, `data`,
+  `idempotency_key`) and `TelloApiConnectionError` under `TelloError`.
+
+### Changed
+
+- The package description and README name the gateway "API gateway
+  (api-gateway)" instead of "turn-provider-gateway".
+
 ## 0.1.3 (2026-10-01)
 
 ### Fixed

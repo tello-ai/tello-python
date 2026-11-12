@@ -4,13 +4,14 @@
 
 > 저장소: `tello-python` · PyPI 배포명: `tello-ai-sdk` · import: `tello`
 
-Python용 Tello SDK. turn-provider-gateway `/sdk` 엔드포인트에 붙는 얇은
-**WebSocket** 실시간 클라이언트입니다. SDK가 대화의 두뇌를 맡습니다.
+Python용 Tello SDK. API 게이트웨이(api-gateway) `/sdk` 엔드포인트에 붙는 얇은
+**WebSocket** 실시간 클라이언트와, 공개 REST 자원 API 클라이언트 `TelloApi`를
+제공합니다. WebSocket 클라이언트는 대화의 두뇌를 맡습니다.
 게이트웨이는 진행 중인 통화에서 상대방이 말한 턴을 실시간으로 넘겨주고,
 핸들러가 만든 답변은 다시 통화로 전달됩니다.
 
-> 전송 계층은 WebSocket뿐입니다. REST나 webhook은 제공하지 않습니다. 프로토콜
-> 계약은 [`docs/protocol/sdk-ws.v1.md`](docs/protocol/sdk-ws.v1.md)에 있습니다.
+> 실시간 프로토콜 계약은 [`docs/protocol/sdk-ws.v1.md`](docs/protocol/sdk-ws.v1.md)에
+> 있습니다. REST 자원 API(도구·에이전트·크루·통화 초안)는 §6을 보세요.
 
 ## 1. 설치
 
@@ -182,7 +183,115 @@ WS 수준 ping heartbeat는 게이트웨이가 주도하고, pong은 `websockets
 보냅니다. 재연결이나 세션 재개 프로토콜은 없습니다. 비정상 종료가 나면 재연결이
 필요한 상황으로 보고 통화를 처음부터 다시 시작하세요.
 
-## 6. 예제
+## 6. REST 자원 API (`TelloApi`)
+
+`TelloApi`는 공개 REST API용 별도 클라이언트입니다. 도구·에이전트·크루
+만들기·조회·수정·삭제, 에이전트·크루 목록, 목표로 크루 자동 생성, 통화 초안을
+다룹니다. 새 의존성이 없습니다(표준 라이브러리 `urllib`을 이벤트 루프 밖에서
+실행). 본문과 결과는 그냥 `dict[str, Any]`라서 SDK가 아직 모르는 칸도 잃지
+않습니다.
+
+```python
+import asyncio
+from tello import TelloApi, TelloApiError
+
+async def main():
+    api = TelloApi()  # TELLO_API_KEY(와 설정돼 있으면 TELLO_API_URL)를 읽습니다
+    agents = await api.agents.list()
+    tool = await api.tools.create(
+        {"type": "endCall", "name": "통화 끝내기", "functionName": "end_call"},
+        idempotency_key="tool-end-call-001",
+    )
+    await api.tools.update(tool["id"], {"description": "정중하게 통화를 끝냅니다"})
+
+asyncio.run(main())
+```
+
+- **키**: `TelloApi(api_key=...)`, 없으면 `TELLO_API_KEY`(`TelloClient`와 같은
+  규칙·같은 오류). `Authorization: Bearer <키>`로 보내며 `repr()`이나 오류
+  메시지에는 절대 나오지 않습니다.
+- **URL**: `api_url=...`, 없으면 `TELLO_API_URL`, 없으면 `https://api.telloai.io/v1`.
+  `https`만 받습니다. `http`는 `127.0.0.1`·`localhost`·`::1`(테스트용)만 됩니다.
+- **타임아웃**: 요청마다 30초, `crews.generate`와 `call_drafts` 세 요청은 120초.
+  `timeout=` / `long_timeout=`(초)으로 바꿀 수 있습니다.
+- **자동 재시도는 없습니다.** (같은 멱등 키로) 다시 보내는 것은 호출자 몫입니다.
+- 모든 요청에 `User-Agent: tello-python-sdk/<버전>`을 붙입니다.
+
+| 메서드 | HTTP | 성공 | 반환 |
+| --- | --- | --- | --- |
+| `tools.list(*, limit=None, cursor=None)` | `GET /tools` | 200 | `{"data": [...], "nextCursor": str \| None}` |
+| `tools.get(id)` | `GET /tools/{id}` | 200 | 도구 |
+| `tools.create(body, *, idempotency_key=None)` | `POST /tools` | 201 | 도구(`revision` 포함) |
+| `tools.update(id, patch)` | `PATCH /tools/{id}` | 200 | 도구 |
+| `tools.delete(id)` | `DELETE /tools/{id}` | 204 | `None` |
+| `agents.list()` | `GET /agents` | 200 | `{"data": [{"id", "name", "description", "isDefault"}]}` |
+| `agents.get` / `create` / `update` / `delete` | `/agents[/{id}]` | 200 / 201 / 200 / 204 | 에이전트 / `None` |
+| `crews.list()` | `GET /crews` | 200 | `{"data": [...]}` |
+| `crews.get` / `create` / `update` / `delete` | `/crews[/{id}]` | 200 / 201 / 200 / 204 | 크루 / `None` |
+| `crews.generate(body, *, idempotency_key=None)` | `POST /crews/generate` | 202 (같은 목표의 기존 작업이면 200) | 작업 `{"id", "status": "running", ...}` |
+| `crews.generate_and_wait(body, *, poll_interval=2.0, timeout=600.0, idempotency_key=None)` | generate 후 폴링 | — | 끝난 작업(`succeeded` 또는 `failed`) |
+| `crew_generations.get(id)` | `GET /crew-generations/{id}` | 200 | 작업(`running` / `succeeded` / `failed`) |
+| `call_drafts.create(body, *, idempotency_key=None)` | `POST /call-drafts` | 201 | 초안 |
+| `call_drafts.revise(draft_id, request, *, idempotency_key=None)` | `POST /call-drafts/{id}/revise` `{"request": ...}` | 200 | **새 id**의 초안 |
+| `call_drafts.confirm(draft_id, *, idempotency_key=None)` | `POST /call-drafts/{id}/confirm`(본문 없음) | 201 | 건 통화 |
+
+> **쓰기는 즉시 운영에 반영됩니다.** 도구·에이전트·크루를 만들거나 고치거나
+> 지우면(그리고 `crews.generate`도) 저장·배포·운영 반영까지 한 번에 되고, 다음
+> 통화부터 그대로 쓰입니다. 임시 저장 단계는 없습니다.
+>
+> **`call_drafts.confirm`은 실제로 과금되는 전화를 겁니다.** `call_drafts.create`도
+> 에이전트 시나리오가 준비돼 있으면 바로 걸 수 있습니다(`status` `confirmed`와
+> `callId`). 초안 `status`(`pendingConfirmation`·`needsClarification`·`refused`·
+> `confirmed`)는 모두 `201` 성공이고 오류가 아닙니다.
+
+멱등 키는 `idempotency_key`를 준 때만 보냅니다(create·generate·초안 create/revise).
+`call_drafts.confirm`은 항상 보냅니다. 준 키가 없으면 UUID v4를 만듭니다. 키는
+1~255바이트에 쉼표·제어문자가 없어야 하며, 어기면 요청 없이 `ValueError`가 납니다.
+빈 id도 같습니다. `generate_and_wait`는 `failed` 작업을 예외 없이 돌려주고
+(`job["status"]`로 분기), `timeout`이 지나도 실행 중이면 작업 id를 담은
+`TimeoutError`를 던집니다.
+
+### REST 오류
+
+오류 응답은 `TelloApiError`(`TelloError` 하위)로 던집니다. 칸은 `status`(HTTP),
+`code`(봉투의 `error` 원문 snake_case), `message`, `data`(dict 또는 `None`),
+`idempotency_key`(보낸 키, 없으면 `None`)입니다. 오류 봉투가 아닌 응답(프록시
+페이지 등)은 `code = "http_<상태>"`, 문서에 없는 성공 상태나 JSON 객체가 아닌
+본문은 `code = "invalid_response"`입니다. 응답을 못 받으면(연결 실패·타임아웃)
+`idempotency_key`와 `__cause__`(원인)를 담은 `TelloApiConnectionError`가 납니다.
+**이렇게 실패한 쓰기는 이미 반영됐을 수 있습니다.** 다시 보내기 전에
+`get`/`list`로 확인하세요.
+
+| HTTP | `code` | 의미 |
+| --- | --- | --- |
+| 401 | `unauthenticated` | 키가 없거나 잘못됐거나 폐기됨 |
+| 403 | `insufficient_scope` | 키에 권한이 없음(`data.requiredScope`) |
+| 404 | `tool_not_found` / `agent_not_found` / `crew_not_found` | 이 계정에 없는 항목 |
+| 404 | `crew_generation_not_found` / `draft_not_found` | 없는 작업·초안 |
+| 409 | `idempotency_key_reused` | 다른 요청에 이미 쓴 키 |
+| 409 | `crew_generation_in_progress` | 다른 목표로 크루를 만드는 중(`data.id`) |
+| 409 | `draft_already_confirmed` | 이미 확정한 초안(`data.callId`) |
+| 502 | `write_outcome_unknown` | 반영됐을 수 있음. 확인한 뒤에만 새로 만드세요 |
+| 503 | `upstream_unavailable` | 처리되지 않음. 잠시 뒤 다시 보내세요 |
+
+전체 목록은 공개 REST 오류 문서에 있습니다. `message`가 아니라 `code`로 분기하세요:
+
+```python
+from tello import TelloApiConnectionError, TelloApiError
+
+try:
+    call = await api.call_drafts.confirm(draft_id)
+except TelloApiError as e:
+    if e.code == "draft_already_confirmed":
+        print("이미 건 통화:", e.data["callId"])
+    else:
+        raise
+except TelloApiConnectionError as e:
+    # 전화가 걸렸을 수 있습니다. 새 키가 아니라 같은 키로 다시 보내세요.
+    call = await api.call_drafts.confirm(draft_id, idempotency_key=e.idempotency_key)
+```
+
+## 7. 예제
 
 바로 실행해 볼 수 있는 프로그램이 [`examples/`](examples/README.ko.md)에
 있습니다:
@@ -196,7 +305,7 @@ uv run python examples/call_summary.py     # 게이트로 막아 둔 라이브 �
 세 예제 모두 실제 통화를 겁니다. 먼저
 [`examples/README.ko.md`](examples/README.ko.md)를 읽으세요.
 
-## 7. 버전 호환성
+## 8. 버전 호환성
 
 `tello-ai-sdk 0.1.x`는 Tello WS 프로토콜 `1.0`을 구현합니다.
 

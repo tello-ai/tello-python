@@ -763,6 +763,7 @@ tello-python/
 └── src/tello/
     ├── __init__.py
     ├── client.py       ← TelloClient (WS 연결 수명주기 + 명령 전송 + 인바운드 디스패치)
+    ├── api.py          ← TelloApi (공개 REST 자원 API: 도구·에이전트·크루·크루 생성·통화 초안)
     ├── realtime.py     ← pub/sub 이벤트 핸들러 + answer
     ├── events.py       ← 인바운드 flat 프레임 파서 + EventType
     ├── commands.py     ← 아웃바운드 {event,data} 봉투 빌더

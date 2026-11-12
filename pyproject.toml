@@ -1,7 +1,7 @@
 [project]
 name = "tello-ai-sdk"
 dynamic = ["version"]
-description = "Tello SDK for Python — WebSocket realtime client for turn-provider-gateway"
+description = "Tello SDK for Python — WebSocket realtime client and REST resource API client for the Tello API gateway (api-gateway)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
