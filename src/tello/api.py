@@ -254,14 +254,87 @@ class AgentsApi(_Collection):
         return await self._t.request("GET", "/agents", expect=(200,))
 
 
+class CrewGenerationsApi:
+    """``/crew-generations``: crew generation jobs started by ``crews.generate``."""
+
+    def __init__(self, transport: _Transport) -> None:
+        self._t = transport
+
+    async def get(self, id: str) -> dict[str, Any]:
+        """``GET /crew-generations/{id}`` → the job.
+
+        ``status`` is ``"running"``, ``"succeeded"`` (with ``crew``) or
+        ``"failed"`` (with ``error``, possibly with the crew it left behind).
+        """
+        return await self._t.request("GET", f"/crew-generations/{_check_id(id)}", expect=(200,))
+
+
 class CrewsApi(_Collection):
     """``/crews``: crews of agents that hand a call over to each other."""
 
     _path = "/crews"
 
+    def __init__(self, transport: _Transport, generations: CrewGenerationsApi) -> None:
+        super().__init__(transport)
+        self._generations = generations
+
     async def list(self) -> dict[str, Any]:
         """``GET /crews`` → ``{"data": [...]}``."""
         return await self._t.request("GET", "/crews", expect=(200,))
+
+    async def generate(
+        self, body: dict[str, Any], *, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        """``POST /crews/generate`` → the job ``{"id", "status": "running", …}``.
+
+        Builds, deploys and publishes a crew from ``body["goal"]``. The account
+        builds one crew at a time: the same goal while it runs (or shortly
+        after it succeeded) returns that job (``200``) instead of a new one
+        (``202``); another goal is ``crew_generation_in_progress`` with the
+        running job in ``data.id``. Uses the long timeout.
+        """
+        return await self._t.request(
+            "POST",
+            "/crews/generate",
+            expect=(200, 202),
+            body=body,
+            idempotency_key=idempotency_key,
+            long=True,
+        )
+
+    async def generate_and_wait(
+        self,
+        body: dict[str, Any],
+        *,
+        poll_interval: float = 2.0,
+        timeout: float = 600.0,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """:meth:`generate`, then poll the job until it is no longer running.
+
+        Returns the finished job. A ``"failed"`` job is returned too, not
+        raised: branch on ``job["status"]``. Raises :class:`TimeoutError`
+        (with the job id) when the job still runs after ``timeout`` seconds;
+        the job keeps running on the server.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        job = await self.generate(body, idempotency_key=idempotency_key)
+        if job.get("status") != "running":
+            return job
+        job_id = job.get("id")
+        if not isinstance(job_id, str) or not job_id:
+            raise TelloApiError(200, "invalid_response", "crew generation job has no id")
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise TimeoutError(
+                    f"crew generation {job_id} still running after {timeout} seconds"
+                )
+            await asyncio.sleep(min(poll_interval, remaining))
+            job = await self._generations.get(job_id)
+            if job.get("status") != "running":
+                return job
 
 
 class TelloApi:
@@ -288,7 +361,8 @@ class TelloApi:
         self._transport = _Transport(key, _resolve_api_url(api_url), timeout, long_timeout)
         self.tools = ToolsApi(self._transport)
         self.agents = AgentsApi(self._transport)
-        self.crews = CrewsApi(self._transport)
+        self.crew_generations = CrewGenerationsApi(self._transport)
+        self.crews = CrewsApi(self._transport, self.crew_generations)
 
     @property
     def api_url(self) -> str:
