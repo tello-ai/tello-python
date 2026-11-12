@@ -36,8 +36,8 @@ from .errors import TelloApiConnectionError, TelloApiError
 
 #: Default request timeout in seconds.
 DEFAULT_TIMEOUT = 30.0
-#: Timeout for requests the service may take long to finish
-#: (``crews.generate``, ``call_drafts.create``/``revise``/``confirm``).
+#: Timeout for requests the service may take long to finish: tool, agent and
+#: crew create/update/delete, ``crews.generate`` and ``call_drafts``.
 DEFAULT_LONG_TIMEOUT = 120.0
 
 _USER_AGENT = f"tello-python-sdk/{__version__}"
@@ -204,8 +204,8 @@ def _api_error(status: int, raw: bytes, idempotency_key: str | None) -> TelloApi
 class _Collection:
     """get / create / update / delete of one collection (``/tools`` …).
 
-    Creates, updates and deletes save, deploy and publish at once: the next
-    call uses the result.
+    Creates, updates and deletes save, deploy and publish at once (the next
+    call uses the result), so they use the long timeout; reads use the short one.
     """
 
     _path: str
@@ -233,17 +233,24 @@ class _Collection:
             expect=(201,),
             body=body,
             idempotency_key=idempotency_key,
+            long=True,
         )
 
     async def update(self, id: str, patch: dict[str, Any]) -> dict[str, Any]:
         """``PATCH /{collection}/{id}``: change only the fields in ``patch``."""
         return await self._t.request(
-            "PATCH", f"{self._path}/{_check_id(id)}", expect=(200,), body=patch
+            "PATCH",
+            f"{self._path}/{_check_id(id)}",
+            expect=(200,),
+            body=patch,
+            long=True,
         )
 
     async def delete(self, id: str) -> None:
         """``DELETE /{collection}/{id}`` (``204``)."""
-        await self._t.request("DELETE", f"{self._path}/{_check_id(id)}", expect=(204,))
+        await self._t.request(
+            "DELETE", f"{self._path}/{_check_id(id)}", expect=(204,), long=True
+        )
 
 
 class ToolsApi(_Collection):
@@ -434,8 +441,9 @@ class TelloApi:
     ``api_key`` falls back to ``TELLO_API_KEY``; ``api_url`` to
     ``TELLO_API_URL``, then ``https://api.telloai.io/v1``. Only ``https``
     URLs are accepted (``http`` only for loopback hosts, for tests).
-    ``timeout`` bounds each request in seconds; ``long_timeout`` replaces it
-    for ``crews.generate`` and ``call_drafts`` requests.
+    ``timeout`` bounds each read in seconds; ``long_timeout`` replaces it for
+    writes (tool, agent and crew create/update/delete, ``crews.generate`` and
+    ``call_drafts`` requests).
     """
 
     def __init__(

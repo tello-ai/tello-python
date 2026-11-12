@@ -215,8 +215,9 @@ asyncio.run(main())
   `repr()` or error messages.
 - **URL**: `api_url=...`, else `TELLO_API_URL`, else `https://api.telloai.io/v1`.
   Only `https`; `http` only for `127.0.0.1`, `localhost` or `::1` (tests).
-- **Timeouts**: 30 s per request; 120 s for `crews.generate` and the three
-  `call_drafts` requests. Override with `timeout=` / `long_timeout=` (seconds).
+- **Timeouts**: 30 s for reads (`list`, `get`); 120 s for writes (tool, agent
+  and crew create/update/delete, `crews.generate` and the three `call_drafts`
+  requests). Override with `timeout=` / `long_timeout=` (seconds).
 - **No automatic retries.** Retrying (with the same idempotency key) is yours.
 - Every request sends `User-Agent: tello-python-sdk/<version>`.
 

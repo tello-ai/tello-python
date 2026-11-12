@@ -10,7 +10,8 @@
   `crews.generate_and_wait`, `crew_generations.get`, and `call_drafts`
   (create/revise/confirm). It reads `TELLO_API_KEY` and `TELLO_API_URL`
   (default `https://api.telloai.io/v1`), allows plain `http` only on loopback,
-  sends `User-Agent: tello-python-sdk/<version>`, never retries, and adds no
+  sends `User-Agent: tello-python-sdk/<version>`, waits 30 s for reads and
+  120 s for writes (`timeout=`/`long_timeout=`), never retries, and adds no
   dependency. `call_drafts.confirm` places a real, billed call and always sends
   an `Idempotency-Key` (a UUID v4 when you pass none).
 - `TelloApiError` (`status`, snake_case `code`, `message`, `data`,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tello import TelloApi, TelloApiError
+from tello import TelloApi, TelloApiConnectionError, TelloApiError
 
 KEY = "tello_live_secret"
 
@@ -98,3 +98,29 @@ async def test_agent_in_use_error(api, fake_api):
 
     assert (info.value.status, info.value.code) == (409, "agent_in_use")
     assert info.value.data == {"reason": "crew", "detail": "크루"}
+
+
+@pytest.mark.parametrize("name", ["tools", "agents", "crews"])
+@pytest.mark.parametrize(
+    ("method", "args", "status", "body"),
+    [
+        ("create", ({"name": "n"},), 201, {"id": "x1"}),
+        ("update", ("x1", {"name": "m"}), 200, {"id": "x1"}),
+        ("delete", ("x1",), 204, None),
+    ],
+)
+async def test_writes_use_the_long_timeout(fake_api, name, method, args, status, body):
+    # Writes save, deploy and publish at once and may outlast the short timeout.
+    api = TelloApi(api_key=KEY, api_url=fake_api.url, timeout=0.1, long_timeout=5)
+    fake_api.reply(status, body, delay=0.3)
+
+    await getattr(getattr(api, name), method)(*args)
+
+
+@pytest.mark.parametrize("name", ["tools", "agents", "crews"])
+async def test_reads_use_the_short_timeout(fake_api, name):
+    api = TelloApi(api_key=KEY, api_url=fake_api.url, timeout=0.1, long_timeout=5)
+    fake_api.reply(200, {"id": "x1"}, delay=0.3)
+
+    with pytest.raises(TelloApiConnectionError):
+        await getattr(api, name).get("x1")

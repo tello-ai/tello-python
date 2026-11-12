@@ -215,7 +215,8 @@ asyncio.run(main())
   메시지에는 절대 나오지 않습니다.
 - **URL**: `api_url=...`, 없으면 `TELLO_API_URL`, 없으면 `https://api.telloai.io/v1`.
   `https`만 받습니다. `http`는 `127.0.0.1`·`localhost`·`::1`(테스트용)만 됩니다.
-- **타임아웃**: 요청마다 30초, `crews.generate`와 `call_drafts` 세 요청은 120초.
+- **타임아웃**: 조회(`list`·`get`)는 30초, 쓰기(도구·에이전트·크루 만들기·수정·삭제,
+  `crews.generate`, `call_drafts` 세 요청)는 120초.
   `timeout=` / `long_timeout=`(초)으로 바꿀 수 있습니다.
 - **자동 재시도는 없습니다.** (같은 멱등 키로) 다시 보내는 것은 호출자 몫입니다.
 - 모든 요청에 `User-Agent: tello-python-sdk/<버전>`을 붙입니다.
