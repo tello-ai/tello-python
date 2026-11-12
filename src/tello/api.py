@@ -78,7 +78,17 @@ class _Transport:
         *,
         expect: tuple[int, ...],
         query: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | None:
+        body: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+        long: bool = False,
+    ) -> dict[str, Any]:
+        """Send one request; return the JSON object (``{}`` for ``204``).
+
+        ``expect`` lists the success statuses the API documents for the
+        method; any other ``2xx`` is ``invalid_response``.
+        """
+        if idempotency_key is not None:
+            _check_idempotency_key(idempotency_key)
         url = self.api_url + path
         if query:
             url += "?" + urllib.parse.urlencode(query)
@@ -87,12 +97,21 @@ class _Transport:
             "Accept": "application/json",
             "User-Agent": _USER_AGENT,
         }
-        req = urllib.request.Request(url, method=method, headers=headers)
-        status, raw = await asyncio.to_thread(self._send, req, method, path, self.timeout)
-        return self._result(status, raw, expect)
+        data = None
+        if body is not None:
+            data = json.dumps(body, ensure_ascii=False).encode()
+            headers["Content-Type"] = "application/json"
+        if idempotency_key is not None:
+            # http.client writes header values as latin-1: this sends the
+            # key's UTF-8 bytes unchanged.
+            headers["Idempotency-Key"] = idempotency_key.encode().decode("latin-1")
+        req = urllib.request.Request(url, data=data, method=method, headers=headers)
+        timeout = self.long_timeout if long else self.timeout
+        status, raw = await asyncio.to_thread(self._send, req, timeout, idempotency_key)
+        return _result(status, raw, expect, idempotency_key)
 
     def _send(
-        self, req: urllib.request.Request, method: str, path: str, timeout: float
+        self, req: urllib.request.Request, timeout: float, idempotency_key: str | None
     ) -> tuple[int, bytes]:
         try:
             try:
@@ -103,24 +122,52 @@ class _Transport:
                     return exc.code, exc.read(_MAX_BODY)
         except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:
             reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
-            raise TelloApiConnectionError(f"{method} {path} failed: {reason}") from exc
-
-    @staticmethod
-    def _result(status: int, raw: bytes, expect: tuple[int, ...]) -> dict[str, Any] | None:
-        if not 200 <= status <= 299:
-            raise _api_error(status, raw)
-        if status not in expect:
-            raise TelloApiError(status, "invalid_response", f"unexpected HTTP status {status}")
-        try:
-            body = json.loads(raw)
-        except ValueError:
-            body = None
-        if not isinstance(body, dict):
-            raise TelloApiError(status, "invalid_response", "response is not a JSON object")
-        return body
+            path = urllib.parse.urlsplit(req.full_url).path
+            message = f"{req.get_method()} {path} failed: {reason}"
+            if req.get_method() != "GET":
+                message += (
+                    "; the change may have been applied, check it before retrying"
+                    " (a create with the same idempotency key)"
+                )
+            raise TelloApiConnectionError(message, idempotency_key) from exc
 
 
-def _api_error(status: int, raw: bytes) -> TelloApiError:
+def _check_idempotency_key(key: str) -> None:
+    if not 1 <= len(key.encode()) <= 255:
+        raise ValueError("idempotency_key must be 1 to 255 bytes")
+    if "," in key or any(ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F for c in key):
+        raise ValueError("idempotency_key must not contain commas or control characters")
+
+
+def _check_id(value: str, name: str = "id") -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{name} must be a non-empty string")
+    return urllib.parse.quote(value, safe="")
+
+
+def _result(
+    status: int, raw: bytes, expect: tuple[int, ...], idempotency_key: str | None
+) -> dict[str, Any]:
+    if not 200 <= status <= 299:
+        raise _api_error(status, raw, idempotency_key)
+    if status not in expect:
+        raise TelloApiError(
+            status, "invalid_response", f"unexpected HTTP status {status}", None, idempotency_key
+        )
+    if status == 204:
+        return {}
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        raise TelloApiError(
+            status, "invalid_response", "response is not a JSON object", None, idempotency_key
+        )
+    return body
+
+
+def _api_error(status: int, raw: bytes, idempotency_key: str | None) -> TelloApiError:
     try:
         env = json.loads(raw)
     except ValueError:
@@ -134,12 +181,67 @@ def _api_error(status: int, raw: bytes) -> TelloApiError:
             code,
             message if isinstance(message, str) and message else code,
             data if isinstance(data, dict) else None,
+            idempotency_key,
         )
     try:
         phrase = HTTPStatus(status).phrase
     except ValueError:
         phrase = f"HTTP {status}"
-    return TelloApiError(status, f"http_{status}", phrase)
+    return TelloApiError(status, f"http_{status}", phrase, None, idempotency_key)
+
+
+class _Collection:
+    """get / create / update / delete of one collection (``/tools`` …).
+
+    Creates, updates and deletes save, deploy and publish at once: the next
+    call uses the result.
+    """
+
+    _path: str
+
+    def __init__(self, transport: _Transport) -> None:
+        self._t = transport
+
+    async def get(self, id: str) -> dict[str, Any]:
+        """``GET /{collection}/{id}`` → the item with its full settings."""
+        return await self._t.request("GET", f"{self._path}/{_check_id(id)}", expect=(200,))
+
+    async def create(
+        self, body: dict[str, Any], *, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        """``POST /{collection}`` (``201``) → the created item.
+
+        With ``idempotency_key``, resending the same body returns the first
+        result instead of creating another item.
+        """
+        return await self._t.request(
+            "POST", self._path, expect=(201,), body=body, idempotency_key=idempotency_key
+        )
+
+    async def update(self, id: str, patch: dict[str, Any]) -> dict[str, Any]:
+        """``PATCH /{collection}/{id}``: change only the fields in ``patch``."""
+        return await self._t.request(
+            "PATCH", f"{self._path}/{_check_id(id)}", expect=(200,), body=patch
+        )
+
+    async def delete(self, id: str) -> None:
+        """``DELETE /{collection}/{id}`` (``204``)."""
+        await self._t.request("DELETE", f"{self._path}/{_check_id(id)}", expect=(204,))
+
+
+class ToolsApi(_Collection):
+    """``/tools``: tools agents can use during a call."""
+
+    _path = "/tools"
+
+    async def list(self, *, limit: int | None = None, cursor: str | None = None) -> dict[str, Any]:
+        """``GET /tools`` → one page ``{"data": [...], "nextCursor": str | None}``."""
+        query: dict[str, Any] = {}
+        if limit is not None:
+            query["limit"] = limit
+        if cursor is not None:
+            query["cursor"] = cursor
+        return await self._t.request("GET", "/tools", expect=(200,), query=query)
 
 
 class AgentsApi:
@@ -150,7 +252,7 @@ class AgentsApi:
 
     async def list(self) -> dict[str, Any]:
         """``GET /agents`` → ``{"data": [{"id", "name", "description", "isDefault"}]}``."""
-        return await self._t.request("GET", "/agents", expect=(200,))  # type: ignore[return-value]
+        return await self._t.request("GET", "/agents", expect=(200,))
 
 
 class TelloApi:
@@ -175,6 +277,7 @@ class TelloApi:
         if not key:
             raise ValueError(f"api_key is required (pass api_key=... or set ${ENV_API_KEY})")
         self._transport = _Transport(key, _resolve_api_url(api_url), timeout, long_timeout)
+        self.tools = ToolsApi(self._transport)
         self.agents = AgentsApi(self._transport)
 
     @property
