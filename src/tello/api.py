@@ -244,15 +244,24 @@ class ToolsApi(_Collection):
         return await self._t.request("GET", "/tools", expect=(200,), query=query)
 
 
-class AgentsApi:
+class AgentsApi(_Collection):
     """``/agents``: portal agents."""
 
-    def __init__(self, transport: _Transport) -> None:
-        self._t = transport
+    _path = "/agents"
 
     async def list(self) -> dict[str, Any]:
         """``GET /agents`` → ``{"data": [{"id", "name", "description", "isDefault"}]}``."""
         return await self._t.request("GET", "/agents", expect=(200,))
+
+
+class CrewsApi(_Collection):
+    """``/crews``: crews of agents that hand a call over to each other."""
+
+    _path = "/crews"
+
+    async def list(self) -> dict[str, Any]:
+        """``GET /crews`` → ``{"data": [...]}``."""
+        return await self._t.request("GET", "/crews", expect=(200,))
 
 
 class TelloApi:
@@ -279,6 +288,7 @@ class TelloApi:
         self._transport = _Transport(key, _resolve_api_url(api_url), timeout, long_timeout)
         self.tools = ToolsApi(self._transport)
         self.agents = AgentsApi(self._transport)
+        self.crews = CrewsApi(self._transport)
 
     @property
     def api_url(self) -> str:
