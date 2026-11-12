@@ -57,12 +57,17 @@ class FakeApi:
         delay: float = 0.0,
     ) -> None:
         """Queue one reply. ``body`` is sent as JSON, ``raw`` as is."""
-        data = raw if raw is not None else (b"" if body is None else json.dumps(body).encode())
+        data = (
+            raw
+            if raw is not None
+            else (b"" if body is None else json.dumps(body).encode())
+        )
         self.replies.append(Reply(status, data, content_type, delay))
 
     def error(self, status: int, code: str, message: str, data: Any = None) -> None:
         self.reply(
-            status, {"statusCode": status, "message": message, "error": code, "data": data}
+            status,
+            {"statusCode": status, "message": message, "error": code, "data": data},
         )
 
     @property
@@ -83,7 +88,9 @@ def _handler(fake: FakeApi) -> type[BaseHTTPRequestHandler]:
                     body,
                 )
             )
-            reply = fake.replies.pop(0) if fake.replies else Reply(500, b"no reply queued")
+            reply = (
+                fake.replies.pop(0) if fake.replies else Reply(500, b"no reply queued")
+            )
             if reply.delay:
                 time.sleep(reply.delay)
             self.send_response(reply.status)

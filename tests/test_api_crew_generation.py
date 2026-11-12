@@ -70,7 +70,10 @@ async def test_get_generation(api, fake_api):
     fake_api.reply(200, SUCCEEDED)
 
     assert await api.crew_generations.get("cg_1") == SUCCEEDED
-    assert (fake_api.last.method, fake_api.last.path) == ("GET", "/v1/crew-generations/cg_1")
+    assert (fake_api.last.method, fake_api.last.path) == (
+        "GET",
+        "/v1/crew-generations/cg_1",
+    )
 
 
 async def test_get_unknown_generation(api, fake_api):
@@ -93,7 +96,9 @@ async def test_generate_and_wait_polls_until_the_job_ends(api, fake_api):
     fake_api.reply(200, RUNNING)
     fake_api.reply(200, SUCCEEDED)
 
-    job = await api.crews.generate_and_wait(GOAL, poll_interval=0.01, idempotency_key="g")
+    job = await api.crews.generate_and_wait(
+        GOAL, poll_interval=0.01, idempotency_key="g"
+    )
 
     assert job == SUCCEEDED
     assert [r.path for r in fake_api.requests] == [

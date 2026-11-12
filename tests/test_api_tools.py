@@ -9,7 +9,13 @@ import pytest
 from tello import TelloApi, TelloApiConnectionError, TelloApiError
 
 KEY = "tello_live_secret"
-TOOL = {"id": "t_1", "type": "endCall", "name": "끝내기", "revision": 1, "extra": {"x": 1}}
+TOOL = {
+    "id": "t_1",
+    "type": "endCall",
+    "name": "끝내기",
+    "revision": 1,
+    "extra": {"x": 1},
+}
 
 
 @pytest.fixture
@@ -37,7 +43,10 @@ async def test_get_encodes_the_id_in_the_path(api, fake_api):
     fake_api.reply(200, TOOL)
 
     assert await api.tools.get("t/1 ?") == TOOL
-    assert (fake_api.last.method, fake_api.last.path) == ("GET", "/v1/tools/t%2F1%20%3F")
+    assert (fake_api.last.method, fake_api.last.path) == (
+        "GET",
+        "/v1/tools/t%2F1%20%3F",
+    )
 
 
 async def test_empty_id_is_rejected_without_a_request(api, fake_api):
@@ -91,7 +100,9 @@ async def test_create_answered_200_is_invalid_response(api, fake_api):
 
 
 @pytest.mark.parametrize("key", ["", "a,b", "a\nb", "a\x7fb", "x" * 256, "가" * 86])
-async def test_invalid_idempotency_key_is_rejected_without_a_request(api, fake_api, key):
+async def test_invalid_idempotency_key_is_rejected_without_a_request(
+    api, fake_api, key
+):
     with pytest.raises(ValueError, match="idempotency_key"):
         await api.tools.create({"type": "endCall"}, idempotency_key=key)
     assert fake_api.requests == []

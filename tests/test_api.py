@@ -78,7 +78,12 @@ def test_http_is_allowed_on_loopback(url):
 
 @pytest.mark.parametrize(
     "url",
-    ["http://api.telloai.io/v1", "http://10.0.0.1/v1", "ftp://x/v1", "api.telloai.io/v1"],
+    [
+        "http://api.telloai.io/v1",
+        "http://10.0.0.1/v1",
+        "ftp://x/v1",
+        "api.telloai.io/v1",
+    ],
 )
 def test_other_urls_are_rejected(url):
     with pytest.raises(ValueError, match="api_url"):
@@ -114,7 +119,9 @@ async def test_get_sends_auth_accept_and_user_agent(fake_api):
 
 
 async def test_error_envelope_becomes_tello_api_error(fake_api):
-    fake_api.error(403, "insufficient_scope", "Missing scope", {"requiredScope": "agents:read"})
+    fake_api.error(
+        403, "insufficient_scope", "Missing scope", {"requiredScope": "agents:read"}
+    )
 
     with pytest.raises(TelloApiError) as info:
         await api(fake_api).agents.list()
@@ -146,7 +153,12 @@ async def test_non_json_error_uses_http_status(fake_api):
         await api(fake_api).agents.list()
 
     err = info.value
-    assert (err.status, err.code, err.message, err.data) == (502, "http_502", "Bad Gateway", None)
+    assert (err.status, err.code, err.message, err.data) == (
+        502,
+        "http_502",
+        "Bad Gateway",
+        None,
+    )
 
 
 async def test_json_error_without_envelope_uses_http_status(fake_api):
@@ -155,7 +167,10 @@ async def test_json_error_without_envelope_uses_http_status(fake_api):
     with pytest.raises(TelloApiError) as info:
         await api(fake_api).agents.list()
 
-    assert (info.value.code, info.value.message) == ("http_500", "Internal Server Error")
+    assert (info.value.code, info.value.message) == (
+        "http_500",
+        "Internal Server Error",
+    )
 
 
 async def test_redirect_is_not_followed(fake_api):

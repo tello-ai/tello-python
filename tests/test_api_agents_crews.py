@@ -58,9 +58,16 @@ async def test_create_without_idempotency_key(api, fake_api, name):
 async def test_update(api, fake_api, name):
     fake_api.reply(200, {"id": "x1", "name": "m"})
 
-    assert await getattr(api, name).update("x1", {"name": "m"}) == {"id": "x1", "name": "m"}
+    assert await getattr(api, name).update("x1", {"name": "m"}) == {
+        "id": "x1",
+        "name": "m",
+    }
     req = fake_api.last
-    assert (req.method, req.path, req.json()) == ("PATCH", f"/v1/{name}/x1", {"name": "m"})
+    assert (req.method, req.path, req.json()) == (
+        "PATCH",
+        f"/v1/{name}/x1",
+        {"name": "m"},
+    )
 
 
 @pytest.mark.parametrize("name", ["agents", "crews"])
@@ -82,7 +89,9 @@ async def test_delete(api, fake_api, name):
 
 
 async def test_agent_in_use_error(api, fake_api):
-    fake_api.error(409, "agent_in_use", "Agent is in use", {"reason": "crew", "detail": "크루"})
+    fake_api.error(
+        409, "agent_in_use", "Agent is in use", {"reason": "crew", "detail": "크루"}
+    )
 
     with pytest.raises(TelloApiError) as info:
         await api.agents.delete("a1")
