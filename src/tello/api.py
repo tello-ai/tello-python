@@ -26,6 +26,7 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from http import HTTPStatus
 from typing import Any
 
@@ -64,7 +65,9 @@ def _resolve_api_url(api_url: str | None) -> str:
 
 
 class _Transport:
-    def __init__(self, api_key: str, api_url: str, timeout: float, long_timeout: float) -> None:
+    def __init__(
+        self, api_key: str, api_url: str, timeout: float, long_timeout: float
+    ) -> None:
         self._key = api_key
         self.api_url = api_url
         self.timeout = timeout
@@ -136,7 +139,9 @@ def _check_idempotency_key(key: str) -> None:
     if not 1 <= len(key.encode()) <= 255:
         raise ValueError("idempotency_key must be 1 to 255 bytes")
     if "," in key or any(ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F for c in key):
-        raise ValueError("idempotency_key must not contain commas or control characters")
+        raise ValueError(
+            "idempotency_key must not contain commas or control characters"
+        )
 
 
 def _check_id(value: str, name: str = "id") -> str:
@@ -152,7 +157,11 @@ def _result(
         raise _api_error(status, raw, idempotency_key)
     if status not in expect:
         raise TelloApiError(
-            status, "invalid_response", f"unexpected HTTP status {status}", None, idempotency_key
+            status,
+            "invalid_response",
+            f"unexpected HTTP status {status}",
+            None,
+            idempotency_key,
         )
     if status == 204:
         return {}
@@ -162,7 +171,11 @@ def _result(
         body = None
     if not isinstance(body, dict):
         raise TelloApiError(
-            status, "invalid_response", "response is not a JSON object", None, idempotency_key
+            status,
+            "invalid_response",
+            "response is not a JSON object",
+            None,
+            idempotency_key,
         )
     return body
 
@@ -204,7 +217,9 @@ class _Collection:
 
     async def get(self, id: str) -> dict[str, Any]:
         """``GET /{collection}/{id}`` → the item with its full settings."""
-        return await self._t.request("GET", f"{self._path}/{_check_id(id)}", expect=(200,))
+        return await self._t.request(
+            "GET", f"{self._path}/{_check_id(id)}", expect=(200,)
+        )
 
     async def create(
         self, body: dict[str, Any], *, idempotency_key: str | None = None
@@ -215,7 +230,11 @@ class _Collection:
         result instead of creating another item.
         """
         return await self._t.request(
-            "POST", self._path, expect=(201,), body=body, idempotency_key=idempotency_key
+            "POST",
+            self._path,
+            expect=(201,),
+            body=body,
+            idempotency_key=idempotency_key,
         )
 
     async def update(self, id: str, patch: dict[str, Any]) -> dict[str, Any]:
@@ -234,7 +253,9 @@ class ToolsApi(_Collection):
 
     _path = "/tools"
 
-    async def list(self, *, limit: int | None = None, cursor: str | None = None) -> dict[str, Any]:
+    async def list(
+        self, *, limit: int | None = None, cursor: str | None = None
+    ) -> dict[str, Any]:
         """``GET /tools`` → one page ``{"data": [...], "nextCursor": str | None}``."""
         query: dict[str, Any] = {}
         if limit is not None:
@@ -266,7 +287,9 @@ class CrewGenerationsApi:
         ``status`` is ``"running"``, ``"succeeded"`` (with ``crew``) or
         ``"failed"`` (with ``error``, possibly with the crew it left behind).
         """
-        return await self._t.request("GET", f"/crew-generations/{_check_id(id)}", expect=(200,))
+        return await self._t.request(
+            "GET", f"/crew-generations/{_check_id(id)}", expect=(200,)
+        )
 
 
 class CrewsApi(_Collection):
@@ -324,7 +347,9 @@ class CrewsApi(_Collection):
             return job
         job_id = job.get("id")
         if not isinstance(job_id, str) or not job_id:
-            raise TelloApiError(200, "invalid_response", "crew generation job has no id")
+            raise TelloApiError(
+                200, "invalid_response", "crew generation job has no id"
+            )
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
@@ -335,6 +360,74 @@ class CrewsApi(_Collection):
             job = await self._generations.get(job_id)
             if job.get("status") != "running":
                 return job
+
+
+class CallDraftsApi:
+    """``/call-drafts``: review the scenario of a call before placing it.
+
+    :meth:`confirm` places a **real, billed** phone call. A draft is answered
+    ``201`` whatever its ``status`` (``pendingConfirmation``,
+    ``needsClarification``, ``refused`` or ``confirmed``): branch on it.
+    All three requests use the long timeout.
+    """
+
+    def __init__(self, transport: _Transport) -> None:
+        self._t = transport
+
+    async def create(
+        self, body: dict[str, Any], *, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        """``POST /call-drafts`` (``201``) → the draft.
+
+        An agent with a ready scenario may be called at once (``status``
+        ``confirmed`` with ``callId``); pass ``idempotency_key`` to resend safely.
+        """
+        return await self._t.request(
+            "POST",
+            "/call-drafts",
+            expect=(201,),
+            body=body,
+            idempotency_key=idempotency_key,
+            long=True,
+        )
+
+    async def revise(
+        self, draft_id: str, request: str, *, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        """``POST /call-drafts/{id}/revise`` (``200``) → a new draft with a **new id**.
+
+        The revised draft can no longer be confirmed.
+        """
+        return await self._t.request(
+            "POST",
+            f"/call-drafts/{_check_id(draft_id, 'draft_id')}/revise",
+            expect=(200,),
+            body={"request": request},
+            idempotency_key=idempotency_key,
+            long=True,
+        )
+
+    async def confirm(
+        self, draft_id: str, *, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        """``POST /call-drafts/{id}/confirm`` (``201``) → the placed call.
+
+        Places a real, billed call. The API requires an ``Idempotency-Key``:
+        without ``idempotency_key`` a UUID v4 is generated. The key sent is on
+        any :class:`TelloApiError` / :class:`TelloApiConnectionError` raised,
+        so a retry can reuse it and replay the placed call instead of dialing
+        again.
+        """
+        path = f"/call-drafts/{_check_id(draft_id, 'draft_id')}/confirm"
+        return await self._t.request(
+            "POST",
+            path,
+            expect=(201,),
+            idempotency_key=idempotency_key
+            if idempotency_key is not None
+            else str(uuid.uuid4()),
+            long=True,
+        )
 
 
 class TelloApi:
@@ -357,12 +450,17 @@ class TelloApi:
     ) -> None:
         key = api_key if api_key is not None else os.environ.get(ENV_API_KEY)
         if not key:
-            raise ValueError(f"api_key is required (pass api_key=... or set ${ENV_API_KEY})")
-        self._transport = _Transport(key, _resolve_api_url(api_url), timeout, long_timeout)
+            raise ValueError(
+                f"api_key is required (pass api_key=... or set ${ENV_API_KEY})"
+            )
+        self._transport = _Transport(
+            key, _resolve_api_url(api_url), timeout, long_timeout
+        )
         self.tools = ToolsApi(self._transport)
         self.agents = AgentsApi(self._transport)
         self.crew_generations = CrewGenerationsApi(self._transport)
         self.crews = CrewsApi(self._transport, self.crew_generations)
+        self.call_drafts = CallDraftsApi(self._transport)
 
     @property
     def api_url(self) -> str:
