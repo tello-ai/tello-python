@@ -99,7 +99,9 @@ async def test_create_answered_200_is_invalid_response(api, fake_api):
     assert info.value.idempotency_key == "k"
 
 
-@pytest.mark.parametrize("key", ["", "a,b", "a\nb", "a\x7fb", "x" * 256, "가" * 86])
+@pytest.mark.parametrize(
+    "key", ["", "a,b", "a\nb", "a\tb", "a\x7fb", "x" * 256, "가", "café", "a\x80b"]
+)
 async def test_invalid_idempotency_key_is_rejected_without_a_request(
     api, fake_api, key
 ):
@@ -108,12 +110,12 @@ async def test_invalid_idempotency_key_is_rejected_without_a_request(
     assert fake_api.requests == []
 
 
-async def test_idempotency_key_of_255_bytes_is_accepted(api, fake_api):
+async def test_idempotency_key_of_255_printable_ascii_characters_is_accepted(api, fake_api):
     fake_api.reply(201, TOOL)
 
-    await api.tools.create({"type": "endCall"}, idempotency_key="k" * 255)
+    await api.tools.create({"type": "endCall"}, idempotency_key="k ~" * 85)
 
-    assert fake_api.last.headers["idempotency-key"] == "k" * 255
+    assert fake_api.last.headers["idempotency-key"] == "k ~" * 85
 
 
 async def test_write_connection_error_carries_the_idempotency_key():

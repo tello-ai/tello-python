@@ -105,9 +105,7 @@ class _Transport:
             data = json.dumps(body, ensure_ascii=False).encode()
             headers["Content-Type"] = "application/json"
         if idempotency_key is not None:
-            # http.client writes header values as latin-1: this sends the
-            # key's UTF-8 bytes unchanged.
-            headers["Idempotency-Key"] = idempotency_key.encode().decode("latin-1")
+            headers["Idempotency-Key"] = idempotency_key
         req = urllib.request.Request(url, data=data, method=method, headers=headers)
         timeout = self.long_timeout if long else self.timeout
         status, raw = await asyncio.to_thread(self._send, req, timeout, idempotency_key)
@@ -136,11 +134,11 @@ class _Transport:
 
 
 def _check_idempotency_key(key: str) -> None:
-    if not 1 <= len(key.encode()) <= 255:
-        raise ValueError("idempotency_key must be 1 to 255 bytes")
-    if "," in key or any(ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F for c in key):
+    if not 1 <= len(key) <= 255:
+        raise ValueError("idempotency_key must be 1 to 255 characters")
+    if "," in key or any(not " " <= c <= "~" for c in key):
         raise ValueError(
-            "idempotency_key must not contain commas or control characters"
+            "idempotency_key must be printable ASCII (0x20-0x7E) without commas"
         )
 
 

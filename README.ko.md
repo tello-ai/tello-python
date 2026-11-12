@@ -246,7 +246,7 @@ asyncio.run(main())
 
 멱등 키는 `idempotency_key`를 준 때만 보냅니다(create·generate·초안 create/revise).
 `call_drafts.confirm`은 항상 보냅니다. 준 키가 없으면 UUID v4를 만듭니다. 키는
-1~255바이트에 쉼표·제어문자가 없어야 하며, 어기면 요청 없이 `ValueError`가 납니다.
+1~255자의 출력 가능한 ASCII(0x20–0x7E)에 쉼표가 없어야 하며, 어기면 요청 없이 `ValueError`가 납니다.
 빈 id도 같습니다. `generate_and_wait`는 `failed` 작업을 예외 없이 돌려주고
 (`job["status"]`로 분기), `timeout`이 지나도 실행 중이면 작업 id를 담은
 `TimeoutError`를 던집니다.

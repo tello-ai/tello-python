@@ -246,7 +246,7 @@ asyncio.run(main())
 
 Idempotency keys are sent only when you pass `idempotency_key` (create, generate,
 draft create/revise). `call_drafts.confirm` always sends one: yours, or a
-generated UUID v4. A key must be 1–255 bytes with no comma or control character,
+generated UUID v4. A key must be 1–255 printable ASCII characters (0x20–0x7E) with no comma,
 otherwise `ValueError` is raised before any request; so is an empty id.
 `generate_and_wait` returns a `failed` job instead of raising (branch on
 `job["status"]`) and raises `TimeoutError` with the job id when it is still
