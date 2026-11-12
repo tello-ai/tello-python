@@ -108,6 +108,10 @@ class ErrorEvent:
     raw: dict[str, Any]
     request_id: str | None = None
     question: str | None = None
+    #: ``requiredScope`` of ``insufficientScope``: the scope the command needs.
+    required_scope: str | None = None
+    #: ``ip`` of ``ipNotAllowed``: the connection address the gateway judged.
+    ip: str | None = None
 
 
 @dataclass
@@ -150,6 +154,8 @@ def parse_event(
             message=frame.get("message", ""),
             request_id=frame.get("requestId"),
             question=frame.get("question"),
+            required_scope=frame.get("requiredScope"),
+            ip=frame.get("ip"),
             raw=frame,
         )
 

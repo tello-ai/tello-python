@@ -118,6 +118,8 @@ await client.aclose()
 | 게이트웨이 `code` | 예외 |
 | --- | --- |
 | `unauthenticated` | `AuthenticationError` (인증 핸드셰이크. 4401 종료 포함) |
+| `ipNotAllowed` | `AuthenticationError` (인증 핸드셰이크. 서버용 키의 허용 IP 밖. 4401 종료. `.ip`에 판정한 주소) |
+| `insufficientScope` | `PermissionDeniedError` (서버용 키에 그 명령의 권한이 없음. 연결은 유지. `.required_scope`에 필요한 권한) |
 | `toRequired` | `ValidationError` |
 | `callIdRequired` | `ValidationError` |
 | `callNotFound` | `ValidationError` |
@@ -159,7 +161,8 @@ await client.aclose()
 끝내 버립니다. 실패한 `create_call`(예: `toRequired`, `callRejected`)이 멈춘
 채 남지 않도록, `wait_closed()`가 그 오류를 다시 raise 합니다:
 
-- 인증 실패(`unauthenticated` 프레임, 4401 종료, `auth.ok` 타임아웃) → `connect()`가 `AuthenticationError` raise
+- 인증 실패(`unauthenticated`·`ipNotAllowed` 프레임, 4401 종료, `auth.ok` 타임아웃) → `connect()`가 `AuthenticationError` raise
+- 인증 중 게이트웨이가 키를 확인하지 못함(`internalError` 프레임 또는 1011 종료) → `connect()`가 `TelloServerError` raise. 키가 거절된 것이 아니므로 잠시 뒤 다시 접속하면 됩니다
 - `create_call` 오류(`call.created` 전의 거부, 또는 그 뒤의 실패) → 위 표의 대응 예외
 - `callAlreadyActive` → `CallAlreadyActiveError`. 단, 통화를 시작한 `create_call`에 대한 응답일 때만입니다. 게이트웨이가 직전 통화를 아직 정리하는 중이라 이 통화는 시작되지 않았으니 잠시 뒤 다시 시도하세요. 통화 도중 보낸 `create_call`에 대한 응답이면 `EventType.ERROR` 이벤트일 뿐이고, 진행 중인 통화는 계속됩니다. `noActiveCall`로는 대기가 끝나지 않습니다
 - 통화 도중 연결 끊김 → `ConnectionClosedError`

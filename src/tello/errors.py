@@ -32,7 +32,34 @@ class SessionReplacedError(TelloError):
 
 
 class AuthenticationError(TelloError):
-    """Connection auth failed (gateway code ``unauthenticated`` / close 4401)."""
+    """Connection auth failed: the server key was refused (``unauthenticated``),
+    the connection is outside the key's allowed IP list (``ipNotAllowed``), a
+    close 4401, or no ``auth.ok`` in time.
+
+    ``ip`` is the connection address the gateway judged for ``ipNotAllowed``
+    (``None`` when it could not prove one, or for other causes).
+    """
+
+    def __init__(
+        self, message: str, code: str | None = None, ip: str | None = None
+    ) -> None:
+        super().__init__(message, code)
+        self.ip = ip
+
+
+class PermissionDeniedError(TelloError):
+    """The server key lacks the scope a command needs (``insufficientScope``).
+
+    Only that command is refused; the connection stays open. ``required_scope``
+    is the scope the command needs (for example ``calls:write``). Not to be
+    confused with Python's built-in ``PermissionError``.
+    """
+
+    def __init__(
+        self, message: str, code: str | None = None, required_scope: str | None = None
+    ) -> None:
+        super().__init__(message, code)
+        self.required_scope = required_scope
 
 
 class ValidationError(TelloError):
@@ -135,6 +162,8 @@ class TelloApiConnectionError(TelloError):
 
 _CODE_TO_EXCEPTION: dict[str, type[TelloError]] = {
     "unauthenticated": AuthenticationError,
+    "ipNotAllowed": AuthenticationError,
+    "insufficientScope": PermissionDeniedError,
     "callAlreadyActive": CallAlreadyActiveError,
     "toRequired": ValidationError,
     "callIdRequired": ValidationError,
@@ -156,9 +185,25 @@ _CODE_TO_EXCEPTION: dict[str, type[TelloError]] = {
 }
 
 
-def exception_for(code: str, message: str, question: str | None = None) -> TelloError:
-    """Build the SDK exception for a gateway error ``code``."""
+def exception_for(
+    code: str,
+    message: str,
+    question: str | None = None,
+    *,
+    required_scope: str | None = None,
+    ip: str | None = None,
+) -> TelloError:
+    """Build the SDK exception for a gateway error ``code``.
+
+    ``question``, ``required_scope`` and ``ip`` are the error frame's
+    ``question``, ``requiredScope`` and ``ip``; each lands on the exception
+    that carries it.
+    """
     exc_type = _CODE_TO_EXCEPTION.get(code, TelloServerError)
     if exc_type is CallRejectedError:
         return CallRejectedError(message, question=question, code=code)
+    if exc_type is PermissionDeniedError:
+        return PermissionDeniedError(message, code, required_scope=required_scope)
+    if exc_type is AuthenticationError:
+        return AuthenticationError(message, code, ip=ip)
     return exc_type(message, code)

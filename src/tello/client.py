@@ -65,6 +65,7 @@ from .errors import (
     ConnectionClosedError,
     SessionReplacedError,
     TelloError,
+    TelloServerError,
     exception_for,
 )
 from .events import ErrorEvent, Event, EventType, is_terminal, parse_event
@@ -74,6 +75,11 @@ from .types import PROTOCOL_VERSION
 logger = logging.getLogger("tello")
 
 _CLOSE_UNAUTHENTICATED = 4401
+_CLOSE_INTERNAL_ERROR = 1011
+#: Error codes that answer the ``auth`` frame: a refused key or address
+#: (``AuthenticationError``) or a gateway that could not check the key
+#: (``internalError`` → ``TelloServerError``, retrying later is fine).
+_AUTH_ERROR_CODES = frozenset({"unauthenticated", "ipNotAllowed", "internalError"})
 _CLOSE_SESSION_REPLACED = 4429
 
 
@@ -198,8 +204,10 @@ class TelloClient(EventEmitter):
 
         Sends the ``auth`` frame (API key in its ``token`` field) as the first
         frame, then blocks until the server returns ``auth.ok``. An
-        ``unauthenticated`` error frame, a 4401 close, or a wait timeout are all
-        raised as connection failures. The API key is never included in any
+        ``unauthenticated`` or ``ipNotAllowed`` error frame, a 4401 close, or a
+        wait timeout raise ``AuthenticationError``; an ``internalError`` frame or
+        a 1011 close (the gateway could not check the key) raise
+        ``TelloServerError``. The API key is never included in any
         raised message.
         """
         await self._ws.send(encode(auth_frame(self._config.api_key)))
@@ -223,8 +231,9 @@ class TelloClient(EventEmitter):
 
         if frame.get("type") == "auth.ok":
             return
-        if frame.get("type") == "error" and frame.get("code") == "unauthenticated":
-            raise AuthenticationError(frame.get("message") or "unauthenticated")
+        if frame.get("type") == "error" and frame.get("code") in _AUTH_ERROR_CODES:
+            code = frame["code"]
+            raise exception_for(code, frame.get("message") or code, ip=frame.get("ip"))
         raise AuthenticationError("unexpected authentication response")
 
     def _auth_close_error(self, exc: ConnectionClosed) -> TelloError:
@@ -233,6 +242,9 @@ class TelloClient(EventEmitter):
         code = received.code if received is not None else getattr(self._ws, "close_code", None)
         if code == _CLOSE_UNAUTHENTICATED:
             return AuthenticationError("unauthenticated")
+        if code == _CLOSE_INTERNAL_ERROR:
+            # The gateway could not check the key; it was not refused.
+            return TelloServerError("internal error during authentication", "internalError")
         if code == _CLOSE_SESSION_REPLACED:
             return SessionReplacedError("session replaced")
         return ConnectionClosedError("connection closed during authentication")
@@ -408,7 +420,13 @@ class TelloClient(EventEmitter):
         # waits on that call are released with its outcome, and a handler that
         # calls create_call() starts a new call instead of joining this one.
         if isinstance(event, ErrorEvent):
-            exc = exception_for(event.code, event.message, event.question)
+            exc = exception_for(
+                event.code,
+                event.message,
+                event.question,
+                required_scope=event.required_scope,
+                ip=event.ip,
+            )
             if event.code == "unauthenticated":
                 self._close_exc = exc
             elif self._error_ends_call(event):

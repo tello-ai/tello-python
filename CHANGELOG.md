@@ -15,9 +15,20 @@
   an `Idempotency-Key` (a UUID v4 when you pass none).
 - `TelloApiError` (`status`, snake_case `code`, `message`, `data`,
   `idempotency_key`) and `TelloApiConnectionError` under `TelloError`.
+- WebSocket error codes from the synced contract: `ipNotAllowed` maps to
+  `AuthenticationError` (with `.ip`), and `insufficientScope` to the new
+  `PermissionDeniedError` (with `.required_scope`; only that command is
+  refused, the connection stays open). `ErrorEvent` carries `required_scope`
+  and `ip`, and `exception_for` takes them as keyword arguments.
 
 ### Changed
 
+- **Behavior change**: when the gateway cannot check the key during auth
+  (`internalError` frame or close 1011), `connect()` raises `TelloServerError`
+  instead of `AuthenticationError`/`ConnectionClosedError`: the key was not
+  refused, so connecting again later is fine. Auth error frames now set `.code`.
+- `docs/protocol/sdk-ws.v1.md`, `docs/events/sdk-events.v1.schema.json` and
+  `docs/errors/errors.v1.json` are synced from the gateway.
 - The package description and README name the gateway "API gateway
   (api-gateway)" instead of "turn-provider-gateway".
 

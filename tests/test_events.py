@@ -159,6 +159,24 @@ def test_parse_call_rejected_carries_question():
     assert event.question == "why?"
 
 
+def test_parse_insufficient_scope_carries_required_scope():
+    event = parse_event(
+        {"type": "error", "version": "1.0", "code": "insufficientScope", "message": "m", "requiredScope": "calls:read"}
+    )
+    assert isinstance(event, ErrorEvent)
+    assert event.required_scope == "calls:read"
+    assert event.ip is None
+
+
+def test_parse_ip_not_allowed_carries_ip():
+    event = parse_event(
+        {"type": "error", "version": "1.0", "code": "ipNotAllowed", "message": "m", "ip": "203.0.113.7"}
+    )
+    assert isinstance(event, ErrorEvent)
+    assert event.ip == "203.0.113.7"
+    assert event.required_scope is None
+
+
 def test_parse_call_summary():
     summary = parse_event(
         {

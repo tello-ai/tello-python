@@ -118,6 +118,8 @@ Gateway error frames map 1:1 to exceptions
 | gateway `code` | exception |
 | --- | --- |
 | `unauthenticated` | `AuthenticationError` (auth handshake; also close code 4401) |
+| `ipNotAllowed` | `AuthenticationError` (auth handshake; the server key's allowed IP list excludes this connection; close 4401; `.ip` is the address judged) |
+| `insufficientScope` | `PermissionDeniedError` (the server key lacks the command's scope; the connection stays open; `.required_scope` names it) |
 | `toRequired` | `ValidationError` |
 | `callIdRequired` | `ValidationError` |
 | `callNotFound` | `ValidationError` |
@@ -158,7 +160,8 @@ requestId on another command, because an error answering that command would
 then end the wait. `wait_closed()` re-raises the relevant error so a failed
 `create_call` (e.g. `toRequired`, `callRejected`) does not hang:
 
-- auth failure (`unauthenticated` frame, close 4401, or `auth.ok` timeout) → `AuthenticationError`, raised from `connect()`
+- auth failure (`unauthenticated` or `ipNotAllowed` frame, close 4401, or `auth.ok` timeout) → `AuthenticationError`, raised from `connect()`
+- the gateway unable to check the key during auth (`internalError` frame or close 1011) → `TelloServerError`, raised from `connect()`; the key was not refused, so connect again later
 - a `create_call` error (a refusal before `call.created`, or a failure after it) → its mapped exception above
 - `callAlreadyActive` → `CallAlreadyActiveError`, but only when it answers the `create_call` that started the call: the gateway is still finishing the previous call, so this one never started. Retry shortly. Answering a `create_call` sent during a live call, it is only an `EventType.ERROR` event and the live call continues. `noActiveCall` never ends the wait
 - the connection dropping mid-call → `ConnectionClosedError`
